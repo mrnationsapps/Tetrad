@@ -9,8 +9,6 @@ struct ContentView: View {
     @EnvironmentObject var boosts: BoostsService
     @State private var showBoostsPanel: Bool = false     // compact panel in the bag area
     private enum BoostMode { case none, smart }
-    @State private var boostMode: BoostMode = .none      // which boost is armed
-    @State private var isTargeting: Bool = false         // waiting for a board tap
 
     // selection (tap-to-place still supported)
     @State private var selectedTileID: UUID? = nil
@@ -23,10 +21,21 @@ struct ContentView: View {
     @State private var tileScale: CGFloat = 1.0   // 1.0 = natural responsive size
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
     @State private var bagGap: CGFloat = 0         // spacing between bag tiles
-    @State private var boardTest: Int = 3          // adjust to shift the daily puzzle. testing purposes only
     @State private var boardRect: CGRect = .zero
     @State private var bagRect:   CGRect = .zero
 
+    // TESTING ONLY.  DO NOT LEAVE ON RELEASE
+    @State private var boardTest: Int = 0          // adjust to shift the daily puzzle. testing purposes only
+    @State private var boostTest: Int = 10
+    
+    // TESTING HELPERS
+    private var effectiveBoostsRemaining: Int {
+        boosts.remaining + max(0, boostTest)
+    }
+    private var canUseBoost: Bool {
+        effectiveBoostsRemaining > 0
+    }
+    
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 16) {
@@ -98,15 +107,14 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Under-board controls
 
+    // MARK: - Under-board controls
     private var underBoardControls: some View {
         HStack {
             Spacer()
             Button {
-                // Toggle compact panel; disarm targeting if closing
+                // Toggle compact Boosts panel (no targeting state anymore)
                 showBoostsPanel.toggle()
-                if !showBoostsPanel { boostMode = .none; isTargeting = false }
             } label: {
                 Label("Boosts", systemImage: "bolt.fill")
                     .labelStyle(.titleAndIcon)
@@ -131,18 +139,22 @@ struct ContentView: View {
             HStack {
                 Label("Boosts", systemImage: "bolt.fill").font(.headline)
                 Spacer()
-                Text("\(boosts.remaining) left today")
+                Text("\(effectiveBoostsRemaining) left today")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 12) {
-                // Smart Boost (targeted)
+                // Smart Boost
                 Button {
-                    boostMode = .smart
-                    isTargeting = true
-                    showBoostsPanel = false   // reveal board + bag while targeting
-                    bagRect = .zero           // avoid accidental bag hit-tests during targeting
+                    let success = game.applySmartBoost(movePenalty: 10)
+                    if success {
+                        if boostTest > 0 {
+                            boostTest -= 1            // burn a test boost first
+                        } else {
+                            _ = boosts.useOne()       // then fall back to real pool
+                        }
+                    }
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "wand.and.stars").font(.title2)
@@ -152,7 +164,8 @@ struct ContentView: View {
                     .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(boosts.remaining == 0)
+                .disabled(!canUseBoost)   // uses the combined pool
+
 
                 // Placeholders for future boosts
                 VStack(spacing: 6) {
@@ -318,17 +331,7 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                // If Smart Boost targeting is armed, attempt targeted placement
-                if isTargeting, boostMode == .smart {
-                    let success = game.applySmartBoost(at: coord, movePenalty: 10)
-                    if success { _ = boosts.useOne() }
-                    // Disarm after the attempt (whether success or not)
-                    isTargeting = false
-                    boostMode = .none
-                    return
-                }
-
-                // Normal tap-to-place behavior (only when not targeting)
+                // Normal tap-to-place only
                 if let tid = selectedTileID,
                    let t = game.tiles.first(where: { $0.id == tid }) {
                     game.placeTile(t, at: coord)

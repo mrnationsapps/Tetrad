@@ -70,8 +70,6 @@ final class WordSquareGenerator {
 
                     NSLog("🧩 Puzzle solution ROWS: \(rowsText)")
                     NSLog("🧩 Puzzle solution COLS: \(colsText)")
-                    print("🧩 ROWS:", rowsText)
-                    print("🧩 COLS:", colsText)
 
                     let bagKey = String(bag.sorted())
                     if seenBags.insert(bagKey).inserted {

@@ -14,12 +14,15 @@ final class GameState: ObservableObject {
     private let versionKey = "TETRAD_v1"
     private var identity: PuzzleIdentity?
 
+    // 🔹 Remember most recent auto Smart Boost placement (for adjacency avoidance)
+    private var lastSmartBoostCoord: BoardCoord? = nil
+
     // 🔹 In-memory cache of today's 4-word solution (rows), set during generation.
     //     Not persisted (we can always regenerate deterministically for today).
     private var solution: [String]? = nil
 
     init() {
-        bootstrapForToday()
+        // Intentionally empty: we bootstrap when the user chooses to play
     }
 
     // MARK: - Daily bootstrap / generation / restore
@@ -42,7 +45,6 @@ final class GameState: ObservableObject {
         // 3) Restore saved progress for today if it exists; otherwise start fresh.
         restoreRunStateOrStartFresh(for: todayKey)
     }
-
 
     private func generateNewDailyIdentity(date: Date) {
         let words = DictionaryLoader.loadFourLetterWords()
@@ -68,6 +70,8 @@ final class GameState: ObservableObject {
         board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
         solved = false
         invalidHighlights = []
+        // Reset boost adjacency memory on a fresh build
+        lastSmartBoostCoord = nil
     }
 
     private func restoreRunStateOrStartFresh(for todayKey: String) {
@@ -105,6 +109,7 @@ final class GameState: ObservableObject {
         moveCount = 0
         solved = false
         board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
+        lastSmartBoostCoord = nil
         let run = RunState(moves: 0,
                            solvedToday: false,
                            placements: [],
@@ -129,8 +134,6 @@ final class GameState: ObservableObject {
         persistProgressSnapshot()
     }
 
-
-
     func tile(at coord: BoardCoord) -> LetterTile? {
         guard let id = board[coord.row][coord.col] else { return nil }
         return tiles.first(where: { $0.id == id })
@@ -154,7 +157,7 @@ final class GameState: ObservableObject {
         if let occupying = self.tile(at: coord) {
             if case .board(let prev) = tile.location {
                 moveTileTo(occupying, to: .board(prev), countAsMove: false)
-                } else {
+            } else {
                 moveTileTo(occupying, to: .bag, countAsMove: false)
             }
         }
@@ -277,88 +280,79 @@ final class GameState: ObservableObject {
     }
 }
 
-// MARK: - Boosts
-
-// MARK: - Smart Boost (targeted + legacy auto)
+// MARK: - Smart Boost (auto with non-adjacent preference)
 
 extension GameState {
-
-    /// TARGETED Smart Boost:
-    /// Places the correct letter at `coord` (if available in the bag),
-    /// applies +movePenalty (without adding a normal move), and persists.
-    /// Returns true on success; false if the cell is already correct or the needed letter
-    /// is not available in the bag.
-    func applySmartBoost(at coord: BoardCoord, movePenalty: Int) -> Bool {
-        guard let solution = self.solution, solution.count == 4 else {
-            NSLog("SmartBoost(at:): no solution cached for today")
-            return false
-        }
-
-        let rowChars = Array(solution[coord.row])
-        let needed = rowChars[coord.col]
-
-        // Already correct? Nothing to do.
-        if let existing = tile(at: coord), existing.letter == needed {
-            return false
-        }
-
-        // Find the actual tile instance in the bag with that letter.
-        guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
-            // Not available in bag (could be placed elsewhere on board or already consumed)
-            return false
-        }
-
-        // If the target cell is occupied, move that tile back to the bag (no normal move counted).
-        if let occupying = tile(at: coord) {
-            moveTileTo(occupying, to: .bag, countAsMove: false)
-        }
-
-        // Drop the chosen tile into the target coord (no normal move counted).
-        var chosen = tiles[bagIdx]
-        chosen.hasBeenPlacedOnce = true
-        tiles[bagIdx] = chosen
-        moveTileTo(chosen, to: .board(coord), countAsMove: false)
-
-        // Apply Boost penalty and persist.
-        moveCount += movePenalty
-        checkIfSolved()
-        persistProgressSnapshot()
-        return true
-    }
-
-    /// LEGACY auto Smart Boost (kept for compatibility):
-    /// Places one correct tile somewhere on the board (row-major scan),
-    /// applies +movePenalty, and returns true on success.
-    /// New UI should prefer `applySmartBoost(at:movePenalty:)`.
+    /// Reveals (places) one correct tile at a random eligible coord.
+    /// Prefers coords that are NOT orthogonally adjacent to the last auto-boost;
+    /// falls back to adjacent if no other options exist.
+    /// Applies +movePenalty (without adding a normal move) and persists.
     func applySmartBoost(movePenalty: Int) -> Bool {
         guard let solution = self.solution, solution.count == 4 else {
             NSLog("SmartBoost(auto): no solution cached for today")
             return false
         }
 
-        // Build a quick availability map of bag letters (handles duplicates).
+        // Bag availability (handles duplicates)
         var bagCounts: [Character: Int] = [:]
         for t in tiles where t.location == .bag {
             bagCounts[t.letter, default: 0] += 1
         }
 
-        // Walk the board; find first coord that's not already correct and is fillable from the bag.
+        // Build candidate coords: not already correct AND needed letter is in the bag
+        var candidates: [BoardCoord] = []
         for r in 0..<4 {
             let rowChars = Array(solution[r])
             for c in 0..<4 {
-                let needed = rowChars[c]
                 let coord = BoardCoord(row: r, col: c)
+                let needed = rowChars[c]
 
                 if let existing = tile(at: coord), existing.letter == needed { continue }
                 guard let count = bagCounts[needed], count > 0 else { continue }
-
-                // Attempt using the targeted API (applies penalty/persist internally).
-                return applySmartBoost(at: coord, movePenalty: movePenalty)
+                candidates.append(coord)
             }
         }
 
-        // Nothing placeable found.
-        return false
+        guard !candidates.isEmpty else { return false }
+
+        // Prefer non-adjacent to the last placement; fallback to all if none
+        let pool: [BoardCoord]
+        if let last = lastSmartBoostCoord {
+            let nonAdjacent = candidates.filter { !isAdjacent($0, last) }
+            pool = nonAdjacent.isEmpty ? candidates : nonAdjacent
+        } else {
+            pool = candidates
+        }
+
+        guard let chosen = pool.randomElement() else { return false }
+
+        // Place the correct letter at `chosen` (no normal move counted)
+        let needed = Array(solution[chosen.row])[chosen.col]
+
+        // If target is occupied, move that tile back to bag first
+        if let occupying = tile(at: chosen) {
+            moveTileTo(occupying, to: .bag, countAsMove: false)
+        }
+
+        // Find the actual bag tile with the needed letter
+        guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
+            return false
+        }
+
+        var chosenTile = tiles[bagIdx]
+        chosenTile.hasBeenPlacedOnce = true
+        tiles[bagIdx] = chosenTile
+        moveTileTo(chosenTile, to: .board(chosen), countAsMove: false)
+
+        moveCount += movePenalty
+        lastSmartBoostCoord = chosen
+        checkIfSolved()
+        persistProgressSnapshot()
+        return true
+    }
+
+    // Helper: 4-neighbor (orthogonal) adjacency
+    private func isAdjacent(_ a: BoardCoord, _ b: BoardCoord) -> Bool {
+        abs(a.row - b.row) + abs(a.col - b.col) == 1
     }
 }
-

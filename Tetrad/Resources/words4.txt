@@ -1415,7 +1415,6 @@ moor
 lube
 sway
 toad
-eros
 malt
 pods
 clap
@@ -1660,7 +1659,6 @@ pate
 snug
 orca
 nook
-koss
 dido
 rosy
 howl
