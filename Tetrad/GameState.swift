@@ -11,10 +11,12 @@ final class GameState: ObservableObject {
     @Published var streak: Int = UserDefaults.standard.integer(forKey: "tetrad_streak")
     @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "tetrad_lastSolvedUTC")
 
+    // 🟩 Smart Boost locks (runtime + persisted-by-coord)
+    @Published var boostedLockedTileIDs: Set<UUID> = []           // runtime-only (IDs change per session)
+    private var boostedLockedCoords: Set<String> = []             // persisted as "r,c" strings
+
     private let versionKey = "TETRAD_v1"
     private var identity: PuzzleIdentity?
-
-    // 🔹 Remember most recent auto Smart Boost placement (for adjacency avoidance)
     private var lastSmartBoostCoord: BoardCoord? = nil
 
     // 🔹 In-memory cache of today's 4-word solution (rows), set during generation.
@@ -32,7 +34,6 @@ final class GameState: ObservableObject {
         NSLog("bootstrapForToday → \(todayKey)")
 
         // 1) Always (re)compute today's identity deterministically from the UTC date.
-        //    This should be PURE (no persistence clearing here).
         generateNewDailyIdentity(date: date)
 
         // 2) Build tiles from today's bag so the board reflects today's letters.
@@ -44,6 +45,9 @@ final class GameState: ObservableObject {
 
         // 3) Restore saved progress for today if it exists; otherwise start fresh.
         restoreRunStateOrStartFresh(for: todayKey)
+
+        // 4) Reload Smart Boost locks for today and map them to current tile IDs.
+        loadBoostLocks(for: todayKey)
     }
 
     private func generateNewDailyIdentity(date: Date) {
@@ -70,8 +74,9 @@ final class GameState: ObservableObject {
         board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
         solved = false
         invalidHighlights = []
-        // Reset boost adjacency memory on a fresh build
         lastSmartBoostCoord = nil
+        boostedLockedTileIDs = []
+        boostedLockedCoords = []
     }
 
     private func restoreRunStateOrStartFresh(for todayKey: String) {
@@ -99,7 +104,6 @@ final class GameState: ObservableObject {
                     board[p.row][p.col] = t.id
                 }
             }
-
         } else {
             resetForNewIdentity(todayKey: todayKey)
         }
@@ -110,6 +114,9 @@ final class GameState: ObservableObject {
         solved = false
         board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
         lastSmartBoostCoord = nil
+        boostedLockedTileIDs = []
+        boostedLockedCoords = []
+        clearBoostLocks(for: todayKey) // clean slate for the day key
         let run = RunState(moves: 0,
                            solvedToday: false,
                            placements: [],
@@ -128,6 +135,7 @@ final class GameState: ObservableObject {
         NSLog("📚 Tetrad dictionary loaded: \(dict.count) words")
 
         // 👇 your existing orchestration
+        if let id = identity { clearBoostLocks(for: id.dayUTC) }
         Persistence.clearForNewDay()
         generateNewDailyIdentity(date: date)
         resetForNewIdentity(todayKey: currentUTCDateKey(date))
@@ -140,6 +148,12 @@ final class GameState: ObservableObject {
     }
 
     func placeTile(_ tile: LetterTile, at coord: BoardCoord) {
+        // 🚫 Do not allow moving a Smart-Boost-locked tile
+        if boostedLockedTileIDs.contains(tile.id) { return }
+
+        // 🚫 Do not allow displacing a Smart-Boost-locked occupant
+        if let occ = self.tile(at: coord), boostedLockedTileIDs.contains(occ.id) { return }
+
         var t = tile
         var isMove = false
 
@@ -176,6 +190,9 @@ final class GameState: ObservableObject {
     func removeTile(from coord: BoardCoord) {
         guard let id = board[coord.row][coord.col],
               let idx = tiles.firstIndex(where: { $0.id == id }) else { return }
+        // 🚫 Can't remove Smart-Boost-locked tile
+        if boostedLockedTileIDs.contains(id) { return }
+
         var t = tiles[idx]
         t.location = .bag
         tiles[idx] = t
@@ -211,16 +228,30 @@ final class GameState: ObservableObject {
     }
 
     private func checkIfSolved() {
-        // TEMP: consider filled board solved; replace with trie validation later
+        // Need today's solution to validate
+        guard let solution = self.solution, solution.count == 4 else { return }
+
+        // Board must be fully filled AND match the exact 4×4 solution letters
         for r in 0..<4 {
             for c in 0..<4 {
-                if board[r][c] == nil { return }
+                // Must have a tile in every cell
+                guard let id = board[r][c],
+                      let tile = tiles.first(where: { $0.id == id }) else {
+                    return
+                }
+                let correctChar = Array(solution[r])[c]
+                if tile.letter != correctChar {
+                    return // any mismatch → not solved
+                }
             }
         }
+
+        // All 16 matched
         solved = true
         advanceStreakIfNeeded()
         registerSolvedAndPersist()
     }
+
 
     private func advanceStreakIfNeeded() {
         let fmt = ISO8601DateFormatter()
@@ -263,6 +294,9 @@ final class GameState: ObservableObject {
                            lastPlayedDayUTC: id.dayUTC)
         Persistence.saveIdentity(id)
         Persistence.saveRunState(run)
+
+        // Also persist Smart Boost locks (by coord) whenever we snapshot
+        persistBoostLocks()
     }
 
     private func registerSolvedAndPersist() {
@@ -331,6 +365,8 @@ extension GameState {
 
         // If target is occupied, move that tile back to bag first
         if let occupying = tile(at: chosen) {
+            // If occupant is locked (shouldn't happen), block boost (safety)
+            if boostedLockedTileIDs.contains(occupying.id) { return false }
             moveTileTo(occupying, to: .bag, countAsMove: false)
         }
 
@@ -346,6 +382,12 @@ extension GameState {
 
         moveCount += movePenalty
         lastSmartBoostCoord = chosen
+
+        // 🟩 Mark as locked (runtime + persisted by coord)
+        boostedLockedTileIDs.insert(chosenTile.id)
+        boostedLockedCoords.insert(coordKey(chosen))
+        persistBoostLocks()
+
         checkIfSolved()
         persistProgressSnapshot()
         return true
@@ -354,5 +396,42 @@ extension GameState {
     // Helper: 4-neighbor (orthogonal) adjacency
     private func isAdjacent(_ a: BoardCoord, _ b: BoardCoord) -> Bool {
         abs(a.row - b.row) + abs(a.col - b.col) == 1
+    }
+}
+
+// MARK: - Boost lock persistence (by coord)
+
+extension GameState {
+    private func lockKey(for dayUTC: String) -> String { "tetrad_locks_\(dayUTC)" }
+    private func coordKey(_ coord: BoardCoord) -> String { "\(coord.row),\(coord.col)" }
+    private func parseCoordKey(_ s: String) -> BoardCoord? {
+        let parts = s.split(separator: ",")
+        guard parts.count == 2, let r = Int(parts[0]), let c = Int(parts[1]) else { return nil }
+        return BoardCoord(row: r, col: c)
+    }
+
+    private func persistBoostLocks() {
+        guard let id = identity else { return }
+        let key = lockKey(for: id.dayUTC)
+        UserDefaults.standard.set(Array(boostedLockedCoords), forKey: key)
+    }
+
+    private func loadBoostLocks(for dayUTC: String) {
+        let key = lockKey(for: dayUTC)
+        let arr = (UserDefaults.standard.array(forKey: key) as? [String]) ?? []
+        boostedLockedCoords = Set(arr)
+
+        // Map coords → current tile IDs (IDs change across sessions)
+        boostedLockedTileIDs.removeAll()
+        for s in boostedLockedCoords {
+            if let coord = parseCoordKey(s), let t = tile(at: coord) {
+                boostedLockedTileIDs.insert(t.id)
+            }
+        }
+    }
+
+    private func clearBoostLocks(for dayUTC: String) {
+        let key = lockKey(for: dayUTC)
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

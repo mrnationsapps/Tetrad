@@ -5,6 +5,10 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
+    // TESTING ONLY.  DO NOT LEAVE ON RELEASE
+    @State private var boardTest: Int = 5          // shifts day away from today
+    @State private var boostTest: Int = 10         // adds boosts to your current number
+    
     // MARK: Boosts
     @EnvironmentObject var boosts: BoostsService
     @State private var showBoostsPanel: Bool = false     // compact panel in the bag area
@@ -23,10 +27,11 @@ struct ContentView: View {
     @State private var bagGap: CGFloat = 0         // spacing between bag tiles
     @State private var boardRect: CGRect = .zero
     @State private var bagRect:   CGRect = .zero
+    // Shared space measurement for bag/panel
+    @State private var bagHeight: CGFloat = 0
+    @State private var boostsHeight: CGFloat = 0
+    @State private var showWinPopup = false
 
-    // TESTING ONLY.  DO NOT LEAVE ON RELEASE
-    @State private var boardTest: Int = 0          // adjust to shift the daily puzzle. testing purposes only
-    @State private var boostTest: Int = 10
     
     // TESTING HELPERS
     private var effectiveBoostsRemaining: Int {
@@ -41,12 +46,13 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 header
                 boardView
+                underBoardRegion   // (replaces previous tileArea/footer)
                 underBoardControls           // 👈 Boosts button moved here
-                tileArea                     // 👈 shows Tile Bag OR compact Boosts panel
-                footer
+                //footer
             }
             .padding()
 
+            // Ghost Tile
             if let id = draggingTileID,
                let tile = game.tiles.first(where: { $0.id == id }) {
                 tileGhost(tile, size: ghostSize)
@@ -54,8 +60,49 @@ struct ContentView: View {
                     .position(dragPoint)      // point is in "stage"
                     .allowsHitTesting(false)
             }
+            
+            if showWinPopup {
+                // Dim background
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+
+                // Centered popup
+                VStack(spacing: 12) {
+                    Text("You got it!")
+                        .font(.title2).bold()
+
+                    Button("Copy Win Info") {
+                        UIPasteboard.general.string = game.shareString()
+                        withAnimation(.spring()) { showWinPopup = false }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemBackground))
+                )
+                .shadow(radius: 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .transition(.scale.combined(with: .opacity))
+            }
+
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
+        
+        .navigationBarTitleDisplayMode(.inline)   // keep everything on one compact row
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("TETRAD")
+                    .font(.system(size: 44, weight: .heavy, design: .rounded))
+                    .tracking(3)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .offset(x: -20)   // nudge 5pt to the left
+
+            }
+        }
+
         .onAppear {
             let offsetDate = Calendar(identifier: .gregorian).date(
                 byAdding: .day, value: boardTest, to: Date()
@@ -70,6 +117,11 @@ struct ContentView: View {
                 game.bootstrapForToday(date: offsetDate)
             }
         }
+        
+        .onChange(of: game.solved) { _, isSolved in
+            if isSolved { withAnimation(.spring()) { showWinPopup = true } }
+        }
+
     }
 
     // MARK: - Header / Footer
@@ -77,51 +129,100 @@ struct ContentView: View {
     private var header: some View {
         VStack(spacing: 8) {
             HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").font(.title3)
-                }
                 Spacer()
                 Text("Moves: \(game.moveCount)").bold()
-                Spacer()
                 Text("Streak: \(game.streak)")
             }
-
-            HStack {
-                Text("TETRAD")
-                    .font(.title).bold()
-                Spacer()
-                // (Boosts button now lives under the board)
-            }
         }
     }
 
-    private var footer: some View {
-        HStack {
-            Spacer()
-            if game.solved {
-                Button("Copy Share Text") {
-                    UIPasteboard.general.string = game.shareString()
+//    private var footer: some View {
+//        HStack {
+//            Spacer()
+//            if game.solved {
+//                Button("Copy Share Text") {
+//                    UIPasteboard.general.string = game.shareString()
+//                }
+//                .buttonStyle(.borderedProminent)
+//            }
+//        }
+//    }
+
+    // MARK: - Shared region (Bag <-> Boosts) with horizontal slide
+    @ViewBuilder
+    private var underBoardRegion: some View {
+        GeometryReader { regionGeo in
+            let W = regionGeo.size.width
+            ZStack(alignment: .bottomTrailing) {
+                HStack(spacing: 0) {
+                    // Letters (bag)
+                    tileBag
+                        .frame(width: W)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear  { bagHeight = geo.size.height }
+                                    .onChange(of: geo.size) { oldSize, newSize in
+                                        bagHeight = newSize.height
+                                    }
+                                    // Keep bagRect accurate only when bag is visible
+                                    .onChange(of: showBoostsPanel) { _, isShowing in
+                                        bagRect = isShowing ? .zero : geo.frame(in: .named("stage"))
+                                    }
+
+                            }
+                        )
+
+                    // Boosts panel
+                    compactBoostsPanel
+                        .frame(width: W)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear  { boostsHeight = geo.size.height }
+                                    .onChange(of: geo.size) { _, newSize in
+                                        boostsHeight = newSize.height
+                                    }
+                            }
+                        )
                 }
-                .buttonStyle(.borderedProminent)
+                .offset(x: showBoostsPanel ? -W : 0)                 // 👈 horizontal slide
+                .animation(.easeInOut(duration: 0.25), value: showBoostsPanel)
+                .clipped()
+
+                // Optional: share button floats inside the same region
+                if game.solved {
+                    Button("Copy Share Text") {
+                        UIPasteboard.general.string = game.shareString()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(12)
+                }
             }
         }
+        // Keep a stable height so bag/panel occupy identical vertical space
+        .frame(height: max(bagHeight, boostsHeight))
     }
-
 
     // MARK: - Under-board controls
     private var underBoardControls: some View {
         HStack {
             Spacer()
             Button {
-                // Toggle compact Boosts panel (no targeting state anymore)
-                showBoostsPanel.toggle()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showBoostsPanel.toggle()
+                }
+                // When the boosts panel is showing, disable bag hit-tests
+                if showBoostsPanel { bagRect = .zero }
             } label: {
-                Label("Boosts", systemImage: "bolt.fill")
+                Label(showBoostsPanel ? "Letters" : "Boosts",
+                      systemImage: showBoostsPanel ? "chevron.right" : "chevron.left")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.bordered)
         }
     }
+
 
     // MARK: - Tile Area (Bag or Compact Boosts Panel)
 
@@ -134,66 +235,64 @@ struct ContentView: View {
         }
     }
 
+    // Reusable tile view (top-aligned content inside a fixed 72×72)
+    @ViewBuilder
+    private func boostTile(icon: String, title: String, material: Material) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.title2)
+            Text(title).font(.caption)
+        }
+        .frame(width: 72, height: 72)
+        .background(material)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .alignmentGuide(.top) { d in d[.top] }           // 👈 report our own top
+    }
+
     private var compactBoostsPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Boosts", systemImage: "bolt.fill").font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack(alignment: .top) {
+                Label("Boosts", systemImage: "bolt.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Spacer()
+
                 Text("\(effectiveBoostsRemaining) left today")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 12) {
-                // Smart Boost
+            // Tiles row
+            HStack(alignment: .top, spacing: 12) {
+                // BOOST: REVEAL (Button)
                 Button {
                     let success = game.applySmartBoost(movePenalty: 10)
                     if success {
-                        if boostTest > 0 {
-                            boostTest -= 1            // burn a test boost first
-                        } else {
-                            _ = boosts.useOne()       // then fall back to real pool
-                        }
+                        if boostTest > 0 { boostTest -= 1 } else { _ = boosts.useOne() }
                     }
                 } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "wand.and.stars").font(.title2)
-                        Text("Smart").font(.caption)
-                    }
-                    .frame(width: 72, height: 72)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    boostTile(icon: "wand.and.stars", title: "Reveal", material: .ultraThinMaterial)
                 }
-                .disabled(!canUseBoost)   // uses the combined pool
+                .buttonStyle(.plain)
+                .disabled(!canUseBoost)
+                .alignmentGuide(.top) { d in d[.top] }    // 👈 ensure button uses label's top
 
+                // Placeholders (same top guide)
+                boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
+                    .opacity(0.35)
+                    .alignmentGuide(.top) { d in d[.top] }
 
-                // Placeholders for future boosts
-                VStack(spacing: 6) {
-                    Image(systemName: "arrow.left.arrow.right").font(.title2)
-                    Text("Swap").font(.caption)
-                }
-                .frame(width: 72, height: 72)
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .opacity(0.35)
-
-                VStack(spacing: 6) {
-                    Image(systemName: "eye").font(.title2)
-                    Text("Clarity").font(.caption)
-                }
-                .frame(width: 72, height: 72)
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .opacity(0.35)
+                boostTile(icon: "eye", title: "Clarity", material: .thinMaterial)
+                    .opacity(0.35)
+                    .alignmentGuide(.top) { d in d[.top] }
+                    .padding(.top, 10)
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .onAppear { bagRect = .zero } // while panel is open, disable bag hit-tests
+        // 👇 Pin the whole panel to the top of its slot (not just the header)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+
 
     // MARK: - Board (responsive, instant drag)
 
@@ -278,10 +377,13 @@ struct ContentView: View {
                     .onChange(of: geo.size) { _ in
                         bagRect = geo.frame(in: .named("stage"))
                     }
+                    .onChange(of: showBoostsPanel) { showing in
+                        bagRect = showing ? .zero : geo.frame(in: .named("stage"))
+                    }
             }
         )
     }
-
+    
     @ViewBuilder
     private func boardGrid(cell: CGFloat, gap: CGFloat, boardSize: CGFloat) -> some View {
         VStack(spacing: gap) {
@@ -331,7 +433,7 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                // Normal tap-to-place only
+                if game.solved { selectedTileID = nil; return }
                 if let tid = selectedTileID,
                    let t = game.tiles.first(where: { $0.id == tid }) {
                     game.placeTile(t, at: coord)
@@ -353,31 +455,45 @@ struct ContentView: View {
         onDragBegan: @escaping () -> Void,
         onDragEnded: ((CGPoint) -> Void)? = nil
     ) -> some View {
-        Text(String(tile.letter).uppercased())
-            .font(.title3).bold()
-            .frame(width: max(1, cell - 4), height: max(1, cell - 4))
-            .background(Color(.systemBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.secondary, lineWidth: 1)
-            )
-            .cornerRadius(8)
-            .shadow(radius: 1, x: 0, y: 1)
-            // Instant drag (no long press)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        draggingTileID = tile.id
-                        dragPoint = toStage(value.location)   // convert to "stage"
-                        onDragBegan()
-                    }
-                    .onEnded { value in
-                        draggingTileID = nil
-                        let stagePoint = toStage(value.location)
-                        onDragEnded?(stagePoint)               // notify caller
-                    }
-            )
+        // Locked if placed by Smart Boost OR the game is solved, and currently on the board
+        let isBoostLocked = game.boostedLockedTileIDs.contains(tile.id)
+        let isOnBoard: Bool = {
+            if case .board = tile.location { return true }
+            return false
+        }()
+        let lockedOnBoard = (isBoostLocked || game.solved) && isOnBoard
+        let side = max(1, cell - 4)
+
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(lockedOnBoard ? Color.green : Color(.systemBackground))   // tile background
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(lockedOnBoard ? Color.green.opacity(0.85) : Color.secondary, lineWidth: 1)
+            Text(String(tile.letter).uppercased())
+                .font(.title3).bold()
+                .foregroundStyle(lockedOnBoard ? Color.white : Color.primary)   // contrast on green
+        }
+        .frame(width: side, height: side)
+        .shadow(radius: 1, x: 0, y: 1)
+        // Block dragging for locked tiles (boost-locked or after win)
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    guard !lockedOnBoard else { return }
+                    draggingTileID = tile.id
+                    dragPoint = toStage(value.location)
+                    onDragBegan()
+                }
+                .onEnded { value in
+                    guard !lockedOnBoard else { return }
+                    draggingTileID = nil
+                    let stagePoint = toStage(value.location)
+                    onDragEnded?(stagePoint)
+                }
+        )
     }
+
+
 
     @ViewBuilder
     private func tileGhost(_ tile: LetterTile, size: CGSize) -> some View {
