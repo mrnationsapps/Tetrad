@@ -15,7 +15,10 @@ struct ContentView: View {
     @State private var tileScale: CGFloat = 1.0   // 1.0 = natural responsive size
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
     @State private var bagGap: CGFloat = 0   // spacing between bag tiles
-    @State private var boardTest: Int = 2   // adjust to shift the daily puzzle. testing purposes only
+    @State private var boardTest: Int = 3   // adjust to shift the daily puzzle. testing purposes only
+    @State private var boardRect: CGRect = .zero
+    @State private var bagRect:   CGRect = .zero
+
 
 
     var body: some View {
@@ -92,25 +95,27 @@ struct ContentView: View {
             let cell = max(36, min(base * tileScale, 120))      // clamp to a sensible range
             let boardSize = (4 * cell) + (3 * gap)
 
-
             ZStack(alignment: .topLeading) {
                 boardGrid(cell: cell, gap: gap, boardSize: boardSize)
             }
             .frame(width: boardSize, height: boardSize, alignment: .topLeading)
             // publish live layout info for snapping & conversion
             .onAppear {
-                currentBoardCell  = cell
-                boardGap   = gap
-                boardOriginInStage = geo.frame(in: .named("stage")).origin
+                currentBoardCell     = cell
+                boardGap             = gap
+                boardOriginInStage   = geo.frame(in: .named("stage")).origin
+                boardRect            = geo.frame(in: .named("stage"))          // 👈 capture full rect
             }
             .onChange(of: geo.size) {
-                currentBoardCell  = cell
-                boardGap   = gap
-                boardOriginInStage = geo.frame(in: .named("stage")).origin
+                currentBoardCell     = cell
+                boardGap             = gap
+                boardOriginInStage   = geo.frame(in: .named("stage")).origin
+                boardRect            = geo.frame(in: .named("stage"))          // 👈 keep updated
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
 
 
     // MARK: - Tile bag
@@ -120,10 +125,11 @@ struct ContentView: View {
         let columns  = [GridItem(.adaptive(minimum: bagTileSize), spacing: bagGap)]
 
         return VStack(alignment: .leading, spacing: 8) {
-                Text("Letter Bag").font(.headline)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            LazyVGrid(columns: columns, spacing: bagGap) {   // 👈 use bagGap
+            Text("Letter Bag")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: columns, spacing: bagGap) {
                 ForEach(bagTiles) { tile in
                     GeometryReader { bagGeo in
                         let origin = bagGeo.frame(in: .named("stage")).origin
@@ -131,10 +137,13 @@ struct ContentView: View {
                         tileView(
                             tile,
                             cell: bagTileSize,
-                            gap: boardGap,   // gap here isn’t really used for bag snapping
+                            gap: boardGap,
                             toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
                             onDragBegan: {
                                 ghostSize = .init(width: bagTileSize, height: bagTileSize)
+                            },
+                            onDragEnded: { stagePoint in
+                                handleDrop(of: tile, at: stagePoint)   // 👈 allows dragging back into bag
                             }
                         )
                         .overlay(
@@ -149,10 +158,22 @@ struct ContentView: View {
                         }
                     }
                     .frame(width: bagTileSize, height: bagTileSize)
+
                 }
             }
         }
+        // Capture the bag's live frame in the shared "stage" coordinate space
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear  { bagRect = geo.frame(in: .named("stage")) }
+                    .onChange(of: geo.size) { _ in
+                        bagRect = geo.frame(in: .named("stage"))
+                    }
+            }
+        )
     }
+
 
 
 
@@ -191,9 +212,14 @@ struct ContentView: View {
                         cell: cell,
                         gap: gap,
                         toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
-                        onDragBegan: { ghostSize = .init(width: cell, height: cell) }
+                        onDragBegan: {
+                            ghostSize = .init(width: cell, height: cell)
+                        },
+                        onDragEnded: { stagePoint in
+                            handleDrop(of: tile, at: stagePoint)   // 👈 handle drop on board or bag
+                        }
                     )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)   // ← fill cell
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill cell
                 } else {
                     Color.clear
                 }
@@ -212,6 +238,7 @@ struct ContentView: View {
 
 
 
+
     // MARK: - Tile view with instant drag
 
     @ViewBuilder
@@ -220,49 +247,35 @@ struct ContentView: View {
         cell: CGFloat,
         gap: CGFloat,
         toStage: @escaping (CGPoint) -> CGPoint,
-        onDragBegan: @escaping () -> Void
+        onDragBegan: @escaping () -> Void,
+        onDragEnded: ((CGPoint) -> Void)? = nil   // 👈 new, optional
     ) -> some View {
-        let corner = max(6, cell * 0.12)
-        let fontSz = max(14, cell * 0.55)
-
-        ZStack {
-            RoundedRectangle(cornerRadius: corner)
-                .fill(Color(.systemBackground))
-                // stroke *inside* the bounds so we don't need to inset the content
-                .overlay(
-                    RoundedRectangle(cornerRadius: corner)
-                        .strokeBorder(Color.secondary, lineWidth: 1)
-                )
-
-            Text(String(tile.letter).uppercased())
-                .font(.system(size: fontSz, weight: .bold))
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-        }
-        // ⬇️ No fixed 60×60 here — parent decides size
-        .contentShape(Rectangle())
-        .shadow(radius: 1, x: 0, y: 1)
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    onDragBegan()
-                    draggingTileID = tile.id
-                    dragPoint = toStage(value.location)
-                }
-                .onEnded { value in
-                    draggingTileID = nil
-                    let stagePoint = toStage(value.location)
-                    let boardPoint = CGPoint(
-                        x: stagePoint.x - boardOriginInStage.x,
-                        y: stagePoint.y - boardOriginInStage.y
-                    )
-                    if let coord = coordFrom(pointInBoard: boardPoint, cell: currentBoardCell, gap: boardGap) {
-                        game.placeTile(tile, at: coord)
-                        selectedTileID = nil
+        Text(String(tile.letter).uppercased())
+            .font(.title3).bold()
+            .frame(width: max(1, cell - 4), height: max(1, cell - 4))
+            .background(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary, lineWidth: 1)
+            )
+            .cornerRadius(8)
+            .shadow(radius: 1, x: 0, y: 1)
+            // Instant drag (no long press)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        draggingTileID = tile.id
+                        dragPoint = toStage(value.location)   // convert to "stage"
+                        onDragBegan()
                     }
-                }
-        )
+                    .onEnded { value in
+                        draggingTileID = nil
+                        let stagePoint = toStage(value.location)
+                        onDragEnded?(stagePoint)               // 👈 notify caller
+                    }
+            )
     }
+
 
 
 
@@ -284,6 +297,44 @@ struct ContentView: View {
         }
         .frame(width: size.width, height: size.height, alignment: .center)
         .shadow(radius: 4)
+    }
+
+    private func handleDrop(of tile: LetterTile, at stagePoint: CGPoint) {
+        // Convert from stage-space to board-local
+        let localPoint = CGPoint(
+            x: stagePoint.x - boardRect.minX,
+            y: stagePoint.y - boardRect.minY
+        )
+
+        // If the drop lands inside the 4×4 board, snap to that cell
+        if let coord = coordFrom(
+            pointInBoard: localPoint,
+            cell: currentBoardCell,
+            gap: boardGap
+        ) {
+            game.placeTile(tile, at: coord)
+            return
+        }
+
+        // If the drop lands inside the bag area, send the tile back to the bag
+        if bagRect.contains(stagePoint) {
+            if case .board(let prev) = tile.location {
+                game.removeTile(from: prev)   // your existing API
+            }
+            return
+        }
+
+        // Otherwise: do nothing (tile stays wherever it was before the drag)
+    }
+
+
+    private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
+        // Convert from the shared "stage" space to the board’s local space
+        let local = CGPoint(x: stagePoint.x - boardRect.minX,
+                            y: stagePoint.y - boardRect.minY)
+        return coordFrom(pointInBoard: local,
+                         cell: currentBoardCell,
+                         gap: boardGap)
     }
 
 
