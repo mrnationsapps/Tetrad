@@ -14,6 +14,10 @@ final class GameState: ObservableObject {
     private let versionKey = "TETRAD_v1"
     private var identity: PuzzleIdentity?
 
+    // 🔹 In-memory cache of today's 4-word solution (rows), set during generation.
+    //     Not persisted (we can always regenerate deterministically for today).
+    private var solution: [String]? = nil
+
     init() {
         bootstrapForToday()
     }
@@ -46,9 +50,12 @@ final class GameState: ObservableObject {
         var rng: any RandomNumberGenerator = SeededRNG.dailySeed(version: versionKey, date: date)
 
         if let puzzle = gen.generateDaily(rng: &rng) {
+            // Keep the row solution in memory for Boosts / validation
+            self.solution = puzzle.solution
             let bag = String(puzzle.letters.map { Character($0.lowercased()) })
             identity = PuzzleIdentity(dayUTC: currentUTCDateKey(date), bag: bag)
         } else {
+            self.solution = nil
             let fallback = Array("tetradwordpuzzlega".prefix(16))
             identity = PuzzleIdentity(dayUTC: currentUTCDateKey(date), bag: String(fallback))
         }
@@ -269,3 +276,89 @@ final class GameState: ObservableObject {
         persistProgressSnapshot()
     }
 }
+
+// MARK: - Boosts
+
+// MARK: - Smart Boost (targeted + legacy auto)
+
+extension GameState {
+
+    /// TARGETED Smart Boost:
+    /// Places the correct letter at `coord` (if available in the bag),
+    /// applies +movePenalty (without adding a normal move), and persists.
+    /// Returns true on success; false if the cell is already correct or the needed letter
+    /// is not available in the bag.
+    func applySmartBoost(at coord: BoardCoord, movePenalty: Int) -> Bool {
+        guard let solution = self.solution, solution.count == 4 else {
+            NSLog("SmartBoost(at:): no solution cached for today")
+            return false
+        }
+
+        let rowChars = Array(solution[coord.row])
+        let needed = rowChars[coord.col]
+
+        // Already correct? Nothing to do.
+        if let existing = tile(at: coord), existing.letter == needed {
+            return false
+        }
+
+        // Find the actual tile instance in the bag with that letter.
+        guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
+            // Not available in bag (could be placed elsewhere on board or already consumed)
+            return false
+        }
+
+        // If the target cell is occupied, move that tile back to the bag (no normal move counted).
+        if let occupying = tile(at: coord) {
+            moveTileTo(occupying, to: .bag, countAsMove: false)
+        }
+
+        // Drop the chosen tile into the target coord (no normal move counted).
+        var chosen = tiles[bagIdx]
+        chosen.hasBeenPlacedOnce = true
+        tiles[bagIdx] = chosen
+        moveTileTo(chosen, to: .board(coord), countAsMove: false)
+
+        // Apply Boost penalty and persist.
+        moveCount += movePenalty
+        checkIfSolved()
+        persistProgressSnapshot()
+        return true
+    }
+
+    /// LEGACY auto Smart Boost (kept for compatibility):
+    /// Places one correct tile somewhere on the board (row-major scan),
+    /// applies +movePenalty, and returns true on success.
+    /// New UI should prefer `applySmartBoost(at:movePenalty:)`.
+    func applySmartBoost(movePenalty: Int) -> Bool {
+        guard let solution = self.solution, solution.count == 4 else {
+            NSLog("SmartBoost(auto): no solution cached for today")
+            return false
+        }
+
+        // Build a quick availability map of bag letters (handles duplicates).
+        var bagCounts: [Character: Int] = [:]
+        for t in tiles where t.location == .bag {
+            bagCounts[t.letter, default: 0] += 1
+        }
+
+        // Walk the board; find first coord that's not already correct and is fillable from the bag.
+        for r in 0..<4 {
+            let rowChars = Array(solution[r])
+            for c in 0..<4 {
+                let needed = rowChars[c]
+                let coord = BoardCoord(row: r, col: c)
+
+                if let existing = tile(at: coord), existing.letter == needed { continue }
+                guard let count = bagCounts[needed], count > 0 else { continue }
+
+                // Attempt using the targeted API (applies penalty/persist internally).
+                return applySmartBoost(at: coord, movePenalty: movePenalty)
+            }
+        }
+
+        // Nothing placeable found.
+        return false
+    }
+}
+

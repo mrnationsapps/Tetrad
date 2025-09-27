@@ -3,6 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var game: GameState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
+
+    // MARK: Boosts
+    @EnvironmentObject var boosts: BoostsService
+    @State private var showBoostsPanel: Bool = false     // compact panel in the bag area
+    private enum BoostMode { case none, smart }
+    @State private var boostMode: BoostMode = .none      // which boost is armed
+    @State private var isTargeting: Bool = false         // waiting for a board tap
 
     // selection (tap-to-place still supported)
     @State private var selectedTileID: UUID? = nil
@@ -14,28 +22,27 @@ struct ContentView: View {
     @State private var ghostSize: CGSize = .init(width: 60, height: 60)
     @State private var tileScale: CGFloat = 1.0   // 1.0 = natural responsive size
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
-    @State private var bagGap: CGFloat = 0   // spacing between bag tiles
-    @State private var boardTest: Int = 3   // adjust to shift the daily puzzle. testing purposes only
+    @State private var bagGap: CGFloat = 0         // spacing between bag tiles
+    @State private var boardTest: Int = 3          // adjust to shift the daily puzzle. testing purposes only
     @State private var boardRect: CGRect = .zero
     @State private var bagRect:   CGRect = .zero
-
-
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 16) {
                 header
                 boardView
-                tileBag
+                underBoardControls           // 👈 Boosts button moved here
+                tileArea                     // 👈 shows Tile Bag OR compact Boosts panel
                 footer
             }
             .padding()
-            
+
             if let id = draggingTileID,
                let tile = game.tiles.first(where: { $0.id == id }) {
                 tileGhost(tile, size: ghostSize)
-                    .frame(width: ghostSize.width, height: ghostSize.height)  // 👈 size matches source
-                    .position(dragPoint)                                      // point is in "stage"
+                    .frame(width: ghostSize.width, height: ghostSize.height)
+                    .position(dragPoint)      // point is in "stage"
                     .allowsHitTesting(false)
             }
         }
@@ -46,7 +53,7 @@ struct ContentView: View {
             ) ?? Date()
             game.bootstrapForToday(date: offsetDate)
         }
-        .onChange(of: scenePhase) { oldPhase, newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 let offsetDate = Calendar(identifier: .gregorian).date(
                     byAdding: .day, value: boardTest, to: Date()
@@ -56,26 +63,32 @@ struct ContentView: View {
         }
     }
 
-
-
-
     // MARK: - Header / Footer
 
     private var header: some View {
-        HStack {
-            Text("Tetrad").font(.largeTitle).bold()
-            Spacer()
-            VStack(alignment: .trailing) {
+        VStack(spacing: 8) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left").font(.title3)
+                }
+                Spacer()
                 Text("Moves: \(game.moveCount)").bold()
+                Spacer()
                 Text("Streak: \(game.streak)")
-            }.font(.subheadline)
+            }
+
+            HStack {
+                Text("TETRAD")
+                    .font(.title).bold()
+                Spacer()
+                // (Boosts button now lives under the board)
+            }
         }
     }
 
     private var footer: some View {
         HStack {
             Spacer()
-
             if game.solved {
                 Button("Copy Share Text") {
                     UIPasteboard.general.string = game.shareString()
@@ -83,6 +96,90 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
+    }
+
+    // MARK: - Under-board controls
+
+    private var underBoardControls: some View {
+        HStack {
+            Spacer()
+            Button {
+                // Toggle compact panel; disarm targeting if closing
+                showBoostsPanel.toggle()
+                if !showBoostsPanel { boostMode = .none; isTargeting = false }
+            } label: {
+                Label("Boosts", systemImage: "bolt.fill")
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: - Tile Area (Bag or Compact Boosts Panel)
+
+    @ViewBuilder
+    private var tileArea: some View {
+        if showBoostsPanel {
+            compactBoostsPanel
+        } else {
+            tileBag
+        }
+    }
+
+    private var compactBoostsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Boosts", systemImage: "bolt.fill").font(.headline)
+                Spacer()
+                Text("\(boosts.remaining) left today")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                // Smart Boost (targeted)
+                Button {
+                    boostMode = .smart
+                    isTargeting = true
+                    showBoostsPanel = false   // reveal board + bag while targeting
+                    bagRect = .zero           // avoid accidental bag hit-tests during targeting
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "wand.and.stars").font(.title2)
+                        Text("Smart").font(.caption)
+                    }
+                    .frame(width: 72, height: 72)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(boosts.remaining == 0)
+
+                // Placeholders for future boosts
+                VStack(spacing: 6) {
+                    Image(systemName: "arrow.left.arrow.right").font(.title2)
+                    Text("Swap").font(.caption)
+                }
+                .frame(width: 72, height: 72)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .opacity(0.35)
+
+                VStack(spacing: 6) {
+                    Image(systemName: "eye").font(.title2)
+                    Text("Clarity").font(.caption)
+                }
+                .frame(width: 72, height: 72)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .opacity(0.35)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .onAppear { bagRect = .zero } // while panel is open, disable bag hit-tests
     }
 
     // MARK: - Board (responsive, instant drag)
@@ -115,8 +212,6 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-
 
     // MARK: - Tile bag
 
@@ -174,9 +269,6 @@ struct ContentView: View {
         )
     }
 
-
-
-
     @ViewBuilder
     private func boardGrid(cell: CGFloat, gap: CGFloat, boardSize: CGFloat) -> some View {
         VStack(spacing: gap) {
@@ -226,6 +318,17 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
+                // If Smart Boost targeting is armed, attempt targeted placement
+                if isTargeting, boostMode == .smart {
+                    let success = game.applySmartBoost(at: coord, movePenalty: 10)
+                    if success { _ = boosts.useOne() }
+                    // Disarm after the attempt (whether success or not)
+                    isTargeting = false
+                    boostMode = .none
+                    return
+                }
+
+                // Normal tap-to-place behavior (only when not targeting)
                 if let tid = selectedTileID,
                    let t = game.tiles.first(where: { $0.id == tid }) {
                     game.placeTile(t, at: coord)
@@ -236,9 +339,6 @@ struct ContentView: View {
         .frame(width: cell, height: cell)
     }
 
-
-
-
     // MARK: - Tile view with instant drag
 
     @ViewBuilder
@@ -248,7 +348,7 @@ struct ContentView: View {
         gap: CGFloat,
         toStage: @escaping (CGPoint) -> CGPoint,
         onDragBegan: @escaping () -> Void,
-        onDragEnded: ((CGPoint) -> Void)? = nil   // 👈 new, optional
+        onDragEnded: ((CGPoint) -> Void)? = nil
     ) -> some View {
         Text(String(tile.letter).uppercased())
             .font(.title3).bold()
@@ -271,13 +371,10 @@ struct ContentView: View {
                     .onEnded { value in
                         draggingTileID = nil
                         let stagePoint = toStage(value.location)
-                        onDragEnded?(stagePoint)               // 👈 notify caller
+                        onDragEnded?(stagePoint)               // notify caller
                     }
             )
     }
-
-
-
 
     @ViewBuilder
     private func tileGhost(_ tile: LetterTile, size: CGSize) -> some View {
@@ -293,11 +390,13 @@ struct ContentView: View {
                         .stroke(Color.accentColor, lineWidth: 2)
                 )
             Text(String(tile.letter).uppercased())
-                .font(.system(size: fontSize, weight: .bold, design: .default))
+                .font(.system(size: fontSize, weight: .bold))
         }
         .frame(width: size.width, height: size.height, alignment: .center)
         .shadow(radius: 4)
     }
+
+    // MARK: - Drag/drop helpers
 
     private func handleDrop(of tile: LetterTile, at stagePoint: CGPoint) {
         // Convert from stage-space to board-local
@@ -319,14 +418,13 @@ struct ContentView: View {
         // If the drop lands inside the bag area, send the tile back to the bag
         if bagRect.contains(stagePoint) {
             if case .board(let prev) = tile.location {
-                game.removeTile(from: prev)   // your existing API
+                game.removeTile(from: prev)
             }
             return
         }
 
         // Otherwise: do nothing (tile stays wherever it was before the drag)
     }
-
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
         // Convert from the shared "stage" space to the board’s local space
@@ -337,8 +435,7 @@ struct ContentView: View {
                          gap: boardGap)
     }
 
-
-    // MARK: - Point → cell mapping (uses live cell/gap passed in)
+    // MARK: - Point → cell mapping
 
     private func coordFrom(pointInBoard p: CGPoint, cell: CGFloat, gap: CGFloat) -> BoardCoord? {
         let span = (4 * cell) + (3 * gap)
@@ -360,7 +457,4 @@ struct ContentView: View {
         guard let col = index(for: p.x), let row = index(for: p.y) else { return nil }
         return BoardCoord(row: row, col: col)
     }
-
 }
-
-
