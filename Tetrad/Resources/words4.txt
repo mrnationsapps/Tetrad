@@ -656,7 +656,6 @@ lawn
 soup
 byte
 nose
-thru
 trim
 quit
 lung

@@ -22,18 +22,23 @@ final class GameState: ObservableObject {
 
     func bootstrapForToday(date: Date = Date()) {
         let todayKey = currentUTCDateKey(date)
+        NSLog("bootstrapForToday → \(todayKey)")
 
-        if let id = Persistence.loadIdentity(), id.dayUTC == todayKey {
-            identity = id
+        // 1) Always (re)compute today's identity deterministically from the UTC date.
+        //    This should be PURE (no persistence clearing here).
+        generateNewDailyIdentity(date: date)
+
+        // 2) Build tiles from today's bag so the board reflects today's letters.
+        if let id = identity {
             buildTiles(from: id.bag)
-            restoreRunStateOrStartFresh(for: todayKey)
         } else {
-            Persistence.clearForNewDay()
-            generateNewDailyIdentity(date: date)
-            resetForNewIdentity(todayKey: todayKey)
-            persistProgressSnapshot()
+            NSLog("⚠️ bootstrapForToday: identity missing after generation for \(todayKey)")
         }
+
+        // 3) Restore saved progress for today if it exists; otherwise start fresh.
+        restoreRunStateOrStartFresh(for: todayKey)
     }
+
 
     private func generateNewDailyIdentity(date: Date) {
         let words = DictionaryLoader.loadFourLetterWords()
@@ -104,6 +109,8 @@ final class GameState: ObservableObject {
     // MARK: - Existing APIs
 
     func newDailyPuzzle(date: Date = Date()) {
+        NSLog("🟡 newDailyPuzzle() called for \(currentUTCDateKey(date))")
+
         // 🔎 Probe the bundled dictionary so you can see the count in Xcode’s console
         let dict = DictionaryLoader.loadFourLetterWords()
         NSLog("📚 Tetrad dictionary loaded: \(dict.count) words")
@@ -114,6 +121,7 @@ final class GameState: ObservableObject {
         resetForNewIdentity(todayKey: currentUTCDateKey(date))
         persistProgressSnapshot()
     }
+
 
 
     func tile(at coord: BoardCoord) -> LetterTile? {

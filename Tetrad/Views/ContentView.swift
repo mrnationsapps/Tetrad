@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var tileScale: CGFloat = 1.0   // 1.0 = natural responsive size
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
     @State private var bagGap: CGFloat = 0   // spacing between bag tiles
+    @State private var boardTest: Int = 2   // adjust to shift the daily puzzle. testing purposes only
+
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -35,11 +37,22 @@ struct ContentView: View {
             }
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
-        .onAppear { game.bootstrapForToday() }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active { game.bootstrapForToday() }
+        .onAppear {
+            let offsetDate = Calendar(identifier: .gregorian).date(
+                byAdding: .day, value: boardTest, to: Date()
+            ) ?? Date()
+            game.bootstrapForToday(date: offsetDate)
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                let offsetDate = Calendar(identifier: .gregorian).date(
+                    byAdding: .day, value: boardTest, to: Date()
+                ) ?? Date()
+                game.bootstrapForToday(date: offsetDate)
+            }
         }
     }
+
 
 
 
@@ -58,12 +71,6 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack {
-            Button("New Daily") {
-                game.newDailyPuzzle()
-                selectedTileID = nil
-            }
-            .buttonStyle(.bordered)
-
             Spacer()
 
             if game.solved {
