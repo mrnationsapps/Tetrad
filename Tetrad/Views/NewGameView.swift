@@ -121,16 +121,10 @@ struct NewGameView: View {
 
             // Always-visible Back button (top-left)
             Button(action: onBack) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.headline)
-                    Text("Back").font(.headline)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.black.opacity(0.5))
-                .foregroundColor(.white)
-                .clipShape(Capsule())
+                Image(systemName: "chevron.left").imageScale(.medium)
+                    .foregroundStyle(.primary)
             }
+            .buttonStyle(SoftRaisedPillStyle(height: 32))
             .padding(.top, 12)
             .padding(.leading, 12)
         }

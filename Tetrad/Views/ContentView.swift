@@ -6,7 +6,7 @@ struct ContentView: View {
     @Environment(\.dismiss) private var dismiss
 
     // TESTING ONLY.  DO NOT LEAVE ON RELEASE
-    @State private var boardTest: Int = 5          // shifts day away from today
+    @State private var boardTest: Int = 7          // shifts day away from today
     @State private var boostTest: Int = 10         // adds boosts to your current number
     
     // MARK: Boosts
@@ -31,7 +31,8 @@ struct ContentView: View {
     @State private var bagHeight: CGFloat = 0
     @State private var boostsHeight: CGFloat = 0
     @State private var showWinPopup = false
-
+    @State private var bagGridRect: CGRect = .zero   // precise hit area = LazyVGrid
+    @State private var bagGridWidth: CGFloat = 0
     
     // TESTING HELPERS
     private var effectiveBoostsRemaining: Int {
@@ -215,12 +216,16 @@ struct ContentView: View {
                 // When the boosts panel is showing, disable bag hit-tests
                 if showBoostsPanel { bagRect = .zero }
             } label: {
-                Label(showBoostsPanel ? "Letters" : "Boosts",
-                      systemImage: showBoostsPanel ? "chevron.right" : "chevron.left")
-                    .labelStyle(.titleAndIcon)
+                HStack(spacing: 8) {
+                    Image(systemName: showBoostsPanel ? "chevron.right" : "chevron.left")
+                        .imageScale(.medium)
+                    Text(showBoostsPanel ? "Letters" : "Boosts")
+                }
+                .foregroundStyle(.primary) // good contrast on soft surface
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(SoftRaisedPillStyle(height: 52))
         }
+
     }
 
 
@@ -276,7 +281,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canUseBoost)
-                .alignmentGuide(.top) { d in d[.top] }    // 👈 ensure button uses label's top
+                .alignmentGuide(.top) { d in d[.top] }
 
                 // Placeholders (same top guide)
                 boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
@@ -331,6 +336,14 @@ struct ContentView: View {
         let bagTiles = game.tiles.filter { $0.location == .bag }
         let columns  = [GridItem(.adaptive(minimum: bagTileSize), spacing: bagGap)]
 
+        // Compute reserved height from measured width so the grid doesn't shrink
+        let width = max(1, bagGridWidth)
+        let cols = max(1, Int(floor((width + bagGap) / (bagTileSize + bagGap))))
+        let totalTiles = game.tiles.count                 // full capacity (usually 16)
+        let fullRows = Int(ceil(Double(totalTiles) / Double(cols)))
+        let reservedHeight = (CGFloat(fullRows) * bagTileSize)
+                           + (CGFloat(max(0, fullRows - 1)) * bagGap)
+
         return VStack(alignment: .leading, spacing: 8) {
             Text("Letter Bag")
                 .font(.caption)
@@ -350,7 +363,7 @@ struct ContentView: View {
                                 ghostSize = .init(width: bagTileSize, height: bagTileSize)
                             },
                             onDragEnded: { stagePoint in
-                                handleDrop(of: tile, at: stagePoint)   // 👈 allows dragging back into bag
+                                handleDrop(of: tile, at: stagePoint)   // drop anywhere in the grid
                             }
                         )
                         .overlay(
@@ -365,24 +378,32 @@ struct ContentView: View {
                         }
                     }
                     .frame(width: bagTileSize, height: bagTileSize)
-
                 }
             }
+            // keep the grid a constant, top-aligned height (for the full bag)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: reservedHeight, alignment: .top)
+            // measure width + keep drag/drop hit area aligned to the whole grid
+            .background(
+                GeometryReader { gridGeo in
+                    Color.clear
+                        .onAppear {
+                            bagGridWidth = gridGeo.size.width
+                            bagRect = gridGeo.frame(in: .named("stage"))
+                        }
+                        .onChange(of: gridGeo.size) { _, newSize in
+                            bagGridWidth = newSize.width
+                            bagRect = gridGeo.frame(in: .named("stage"))
+                        }
+                        .onChange(of: showBoostsPanel) { _, isShowing in
+                            bagRect = isShowing ? .zero : gridGeo.frame(in: .named("stage"))
+                        }
+                }
+            )
         }
-        // Capture the bag's live frame in the shared "stage" coordinate space
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear  { bagRect = geo.frame(in: .named("stage")) }
-                    .onChange(of: geo.size) { _ in
-                        bagRect = geo.frame(in: .named("stage"))
-                    }
-                    .onChange(of: showBoostsPanel) { showing in
-                        bagRect = showing ? .zero : geo.frame(in: .named("stage"))
-                    }
-            }
-        )
     }
+
+
     
     @ViewBuilder
     private func boardGrid(cell: CGFloat, gap: CGFloat, boardSize: CGFloat) -> some View {
@@ -406,12 +427,10 @@ struct ContentView: View {
 
             ZStack {
                 // background cell
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(.secondarySystemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Color.secondary, lineWidth: 1)
-                    )
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.clear)
+                    .softRaised(corner: 12)   // 👈 subtle beveled tile well
+
 
                 if let tile = game.tile(at: coord) {
                     tileView(
@@ -455,27 +474,36 @@ struct ContentView: View {
         onDragBegan: @escaping () -> Void,
         onDragEnded: ((CGPoint) -> Void)? = nil
     ) -> some View {
-        // Locked if placed by Smart Boost OR the game is solved, and currently on the board
         let isBoostLocked = game.boostedLockedTileIDs.contains(tile.id)
-        let isOnBoard: Bool = {
-            if case .board = tile.location { return true }
-            return false
-        }()
+        let isOnBoard: Bool = { if case .board = tile.location { true } else { false } }()
         let lockedOnBoard = (isBoostLocked || game.solved) && isOnBoard
         let side = max(1, cell - 4)
+        let isPressed = (draggingTileID == tile.id)
 
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(lockedOnBoard ? Color.green : Color(.systemBackground))   // tile background
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(lockedOnBoard ? Color.green.opacity(0.85) : Color.secondary, lineWidth: 1)
+            if lockedOnBoard {
+                // Success/locked
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.green.opacity(0.85), lineWidth: 1)
+                    )
+            } else {
+                // Soft Raised neutral tile
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.clear)
+                    .softRaised(corner: 12, pressed: isPressed)
+            }
+
             Text(String(tile.letter).uppercased())
                 .font(.title3).bold()
-                .foregroundStyle(lockedOnBoard ? Color.white : Color.primary)   // contrast on green
+                .foregroundStyle(lockedOnBoard ? Color.white : Color.primary)
         }
         .frame(width: side, height: side)
         .shadow(radius: 1, x: 0, y: 1)
-        // Block dragging for locked tiles (boost-locked or after win)
+
+        // Disable drag for locked tiles; allow pressed effect while dragging
         .highPriorityGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
@@ -492,8 +520,6 @@ struct ContentView: View {
                 }
         )
     }
-
-
 
     @ViewBuilder
     private func tileGhost(_ tile: LetterTile, size: CGSize) -> some View {
@@ -518,13 +544,11 @@ struct ContentView: View {
     // MARK: - Drag/drop helpers
 
     private func handleDrop(of tile: LetterTile, at stagePoint: CGPoint) {
-        // Convert from stage-space to board-local
+        // 1) Try snapping to the 4×4 board first
         let localPoint = CGPoint(
             x: stagePoint.x - boardRect.minX,
             y: stagePoint.y - boardRect.minY
         )
-
-        // If the drop lands inside the 4×4 board, snap to that cell
         if let coord = coordFrom(
             pointInBoard: localPoint,
             cell: currentBoardCell,
@@ -534,16 +558,19 @@ struct ContentView: View {
             return
         }
 
-        // If the drop lands inside the bag area, send the tile back to the bag
-        if bagRect.contains(stagePoint) {
+        // 2) Otherwise, if it's inside (or near) the LazyVGrid, return to bag
+        //    bagRect should be the LazyVGrid frame captured in stage space.
+        let hitRect = bagRect.insetBy(dx: -12, dy: -12)  // gentle expansion
+        if hitRect.contains(stagePoint) {
             if case .board(let prev) = tile.location {
                 game.removeTile(from: prev)
             }
             return
         }
 
-        // Otherwise: do nothing (tile stays wherever it was before the drag)
+        // 3) Else: no change (tile stays where it was)
     }
+
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
         // Convert from the shared "stage" space to the board’s local space

@@ -33,7 +33,7 @@ struct IntroView: View {
                     }
 
                     ScrollView {
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: 12) {
                             ForEach(achievements) { ach in
                                 AchievementRow(
                                     achievement: ach,
@@ -43,24 +43,31 @@ struct IntroView: View {
                         }
                         .padding(12)
                     }
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .frame(maxHeight: .infinity, alignment: .top) // ← fills remaining space
+                    // Soft Raised container instead of thinMaterial
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.clear)
+                            .softRaised(corner: 16)
+                    )
+                    .frame(maxHeight: .infinity, alignment: .top) // fills remaining space
                 }
                 .padding(.horizontal)
             }
-            // Pin the button to the bottom of the *NavigationStack*, not inside a GeometryReader
+            // Bottom CTA pinned to safe area
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     Button {
                         navigateToGame = true
                     } label: {
-                        Text("Play Daily Puzzle")
-                            .font(.title3).bold()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.fill").imageScale(.medium)
+                            Text("Play Daily Puzzle")
+                                .font(.title3).bold()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(.primary)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .buttonStyle(SoftRaisedPillStyle(height: 52))
                     .padding(.horizontal)
                     .padding(.top, 8)
                 }
@@ -78,17 +85,20 @@ struct IntroView: View {
     }
 }
 
-// Row (Color.accentColor fix kept)
+// MARK: - Row (Soft Raised)
 private struct AchievementRow: View {
     let achievement: Achievement
     let isUnlocked: Bool
 
     var body: some View {
         HStack(spacing: 12) {
+            // Icon tile (soft raised 44x44)
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isUnlocked ? Color.accentColor.opacity(0.18) : Color.gray.opacity(0.12))
+                    .fill(Color.clear)
                     .frame(width: 44, height: 44)
+                    .softRaised(corner: 10)
+
                 Image(systemName: achievement.symbol)
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(isUnlocked ? Color.accentColor : .secondary)
@@ -115,11 +125,14 @@ private struct AchievementRow: View {
             }
         }
         .padding(10)
+        // Soft Raised card background (corner 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isUnlocked ? Color.accentColor.opacity(0.35) : Color.gray.opacity(0.2), lineWidth: 1)
+                .fill(Color.clear)
+                .softRaised(corner: 12)
         )
+        // Keep the locked ones a bit subdued
         .grayscale(isUnlocked ? 0 : 1)
-        .opacity(isUnlocked ? 1 : 0.6)
+        .opacity(isUnlocked ? 1 : 0.85)
     }
 }
