@@ -5,8 +5,12 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
 
+    var skipDailyBootstrap: Bool = false
+    var par: Int? = nil
+    var enableDailyWinUI: Bool = true   // ⬅️ new (default stays true for Daily)
+
     // TESTING ONLY.  DO NOT LEAVE ON RELEASE
-    @State private var boardTest: Int = 7          // shifts day away from today
+    @State private var boardTest: Int = 0          // shifts day away from today
     @State private var boostTest: Int = 10         // adds boosts to your current number
     
     // MARK: Boosts
@@ -47,9 +51,8 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 header
                 boardView
-                underBoardRegion   // (replaces previous tileArea/footer)
-                underBoardControls           // 👈 Boosts button moved here
-                //footer
+                underBoardRegion          // (replaces previous tileArea/footer)
+                underBoardControls        // Boosts button moved here
             }
             .padding()
 
@@ -61,8 +64,9 @@ struct ContentView: View {
                     .position(dragPoint)      // point is in "stage"
                     .allowsHitTesting(false)
             }
-            
-            if showWinPopup {
+
+            // 🟢 Daily-only win popup (suppressed in Levels via enableDailyWinUI = false)
+            if enableDailyWinUI && showWinPopup {
                 // Dim background
                 Color.black.opacity(0.35)
                     .ignoresSafeArea()
@@ -88,10 +92,9 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .transition(.scale.combined(with: .opacity))
             }
-
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
-        
+
         .navigationBarTitleDisplayMode(.inline)   // keep everything on one compact row
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -99,18 +102,20 @@ struct ContentView: View {
                     .font(.system(size: 44, weight: .heavy, design: .rounded))
                     .tracking(3)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(x: -20)   // nudge 5pt to the left
-
+                    .offset(x: 0)
             }
         }
 
+        // Daily bootstrap stays gated by skipDailyBootstrap
         .onAppear {
+            guard !skipDailyBootstrap else { return }
             let offsetDate = Calendar(identifier: .gregorian).date(
                 byAdding: .day, value: boardTest, to: Date()
             ) ?? Date()
             game.bootstrapForToday(date: offsetDate)
         }
         .onChange(of: scenePhase) { _, newPhase in
+            guard !skipDailyBootstrap else { return }
             if newPhase == .active {
                 let offsetDate = Calendar(identifier: .gregorian).date(
                     byAdding: .day, value: boardTest, to: Date()
@@ -118,12 +123,15 @@ struct ContentView: View {
                 game.bootstrapForToday(date: offsetDate)
             }
         }
-        
+
+        // Only trigger Daily win popup when enabled
         .onChange(of: game.solved) { _, isSolved in
+            guard enableDailyWinUI else { return }
             if isSolved { withAnimation(.spring()) { showWinPopup = true } }
         }
-
+        .onAppear { showWinPopup = false }  // ensure clean state on re-entry
     }
+
 
     // MARK: - Header / Footer
 
@@ -136,18 +144,6 @@ struct ContentView: View {
             }
         }
     }
-
-//    private var footer: some View {
-//        HStack {
-//            Spacer()
-//            if game.solved {
-//                Button("Copy Share Text") {
-//                    UIPasteboard.general.string = game.shareString()
-//                }
-//                .buttonStyle(.borderedProminent)
-//            }
-//        }
-//    }
 
     // MARK: - Shared region (Bag <-> Boosts) with horizontal slide
     @ViewBuilder
@@ -380,10 +376,25 @@ struct ContentView: View {
                     .frame(width: bagTileSize, height: bagTileSize)
                 }
             }
-            // keep the grid a constant, top-aligned height (for the full bag)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .frame(height: reservedHeight, alignment: .top)
-            // measure width + keep drag/drop hit area aligned to the whole grid
+            // Lock height only after width is measured
+            .frame(height: (bagGridWidth > 0) ? reservedHeight : nil, alignment: .top)
+            // Empty state overlay (centered vertically in the reserved area)
+            .overlay(
+                Group {
+                    if bagTiles.isEmpty {
+                        Text("Letter bag empty")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                            .allowsHitTesting(false)   // don’t block drops
+                            .transition(.opacity)
+                    }
+                },
+                alignment: .center
+            )
+            // Measure width + keep drag/drop hit area aligned to the whole grid
             .background(
                 GeometryReader { gridGeo in
                     Color.clear
@@ -402,8 +413,6 @@ struct ContentView: View {
             )
         }
     }
-
-
     
     @ViewBuilder
     private func boardGrid(cell: CGFloat, gap: CGFloat, boardSize: CGFloat) -> some View {

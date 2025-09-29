@@ -4,6 +4,8 @@ struct IntroView: View {
     @EnvironmentObject var game: GameState
     @State private var navigateToGame = false
     @State private var achievements: [Achievement] = Achievement.all
+    @State private var navigateToLevels = false
+
 
     var body: some View {
         NavigationStack {
@@ -15,7 +17,7 @@ struct IntroView: View {
                         .font(.system(size: 44, weight: .heavy, design: .rounded))
                         .tracking(3)
 
-                    Text("Make 8 four-letter words, daily.")
+                    Text("Make 4 four-letter words, daily.")
                         .font(.headline)
                         .foregroundStyle(.secondary)
                 }
@@ -53,29 +55,50 @@ struct IntroView: View {
                 }
                 .padding(.horizontal)
             }
-            // Bottom CTA pinned to safe area
+            // Bottom CTAs pinned to safe area
+
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    // PLAY (Levels)
                     Button {
-                        navigateToGame = true
+                        navigateToLevels = true
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "bolt.fill").imageScale(.medium)
-                            Text("Play Daily Puzzle")
-                                .font(.title3).bold()
+                            Image(systemName: "gamecontroller").imageScale(.medium)
+                            Text("Play").font(.title3).bold()
                         }
                         .frame(maxWidth: .infinity)
                         .foregroundStyle(.primary)
                     }
                     .buttonStyle(SoftRaisedPillStyle(height: 52))
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+
+                    // Play Daily Puzzle
+                    Button {
+                        navigateToGame = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.fill").imageScale(.medium)
+                            Text("Play Daily Puzzle").font(.title3).bold()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(SoftRaisedPillStyle(height: 52))
+                    .padding(.bottom, 4) // a tiny buffer above the home bar
                 }
-                .background(.ultraThinMaterial) // subtle separation, safe-area aware
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .background(.ultraThinMaterial)
             }
+
             .navigationDestination(isPresented: $navigateToGame) {
                 ContentView().environmentObject(game)
             }
+            .navigationDestination(isPresented: $navigateToLevels) {
+                LevelsView()                             // 👈 NEW screen
+                    .environmentObject(game)
+            }
+
         }
         .onAppear { achievements = Achievement.all }
     }

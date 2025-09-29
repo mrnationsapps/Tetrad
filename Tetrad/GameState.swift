@@ -10,6 +10,8 @@ final class GameState: ObservableObject {
     @Published var moveCount: Int = 0
     @Published var streak: Int = UserDefaults.standard.integer(forKey: "tetrad_streak")
     @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "tetrad_lastSolvedUTC")
+    @Published var isLevelMode: Bool = false
+
 
     // 🟩 Smart Boost locks (runtime + persisted-by-coord)
     @Published var boostedLockedTileIDs: Set<UUID> = []           // runtime-only (IDs change per session)
@@ -32,6 +34,7 @@ final class GameState: ObservableObject {
     func bootstrapForToday(date: Date = Date()) {
         let todayKey = currentUTCDateKey(date)
         NSLog("bootstrapForToday → \(todayKey)")
+        isLevelMode = false
 
         // 1) Always (re)compute today's identity deterministically from the UTC date.
         generateNewDailyIdentity(date: date)
@@ -248,9 +251,14 @@ final class GameState: ObservableObject {
 
         // All 16 matched
         solved = true
-        advanceStreakIfNeeded()
-        registerSolvedAndPersist()
+
+        // Only Daily mode updates streak & daily persistence
+        if !isLevelMode {
+            advanceStreakIfNeeded()
+            registerSolvedAndPersist()
+        }
     }
+
 
 
     private func advanceStreakIfNeeded() {
@@ -398,6 +406,40 @@ extension GameState {
         abs(a.row - b.row) + abs(a.col - b.col) == 1
     }
 }
+
+// MARK: - Levels: start a session from a seed (prototype 4×4)
+extension GameState {
+    /// Starts a level session from a fixed seed. Does NOT touch Daily persistence.
+    /// For now this uses your 4-letter dictionary; theme dictionaries come later.
+    func startLevelSession(seed: UInt64, dictionaryID: String? = nil) {
+        isLevelMode = true
+        moveCount = 0
+        solved = false
+        invalidHighlights = []
+        lastSmartBoostCoord = nil
+        boostedLockedTileIDs.removeAll()
+
+        // Load words (later: switch on dictionaryID)
+        let words = DictionaryLoader.loadFourLetterWords()
+        let gen = WordSquareGenerator(words: words)
+
+        // Reuse your seeded RNG helper to get determinism from a seed via Date
+        let date = Date(timeIntervalSince1970: TimeInterval(seed % 31_536_000)) // ~1y cycle
+        var rng: any RandomNumberGenerator = SeededRNG.dailySeed(version: "LEVEL_v1", date: date)
+
+        if let puzzle = gen.generateDaily(rng: &rng) {
+            self.solution = puzzle.solution
+            let bag = String(puzzle.letters.map { Character($0.lowercased()) })
+            buildTiles(from: bag) // resets board & tiles; no run-state save
+        } else {
+            // Fallback (rare)
+            let fallback = Array("tetradwordpuzzlega".prefix(16))
+            buildTiles(from: String(fallback))
+            self.solution = nil
+        }
+    }
+}
+
 
 // MARK: - Boost lock persistence (by coord)
 
