@@ -483,36 +483,55 @@ struct ContentView: View {
         onDragBegan: @escaping () -> Void,
         onDragEnded: ((CGPoint) -> Void)? = nil
     ) -> some View {
-        let isBoostLocked = game.boostedLockedTileIDs.contains(tile.id)
-        let isOnBoard: Bool = { if case .board = tile.location { true } else { false } }()
-        let lockedOnBoard = (isBoostLocked || game.solved) && isOnBoard
+        // Status flags
+        let isOnBoard: Bool = {
+            if case .board = tile.location { return true } else { return false }
+        }()
+        let lockedByBoost = game.boostedLockedTileIDs.contains(tile.id)
+        let lockedByWorld = game.worldLockedTileIDs.contains(tile.id)
+        let solved        = game.solved
+        let lockedOnBoard = (lockedByBoost || lockedByWorld || solved) && isOnBoard
+
+        // Shape fill as a ShapeStyle (not a View)
+        let tileFillStyle: AnyShapeStyle = {
+            if lockedByWorld && isOnBoard {
+                return AnyShapeStyle(
+                    LinearGradient(
+                        colors: [Color.purple.opacity(0.95), Color.purple],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+            } else if (lockedByBoost || solved) && isOnBoard {
+                return AnyShapeStyle(Color.green)
+            } else {
+                return AnyShapeStyle(Color(.systemBackground))
+            }
+        }()
+
+        let strokeColor: Color = {
+            if lockedByWorld && isOnBoard { return .white.opacity(0.85) }
+            if (lockedByBoost || solved) && isOnBoard { return .green.opacity(0.85) }
+            return .secondary
+        }()
+
+        let textColor: Color = {
+            if (lockedByWorld && isOnBoard) || ((lockedByBoost || solved) && isOnBoard) { return .white }
+            return .primary
+        }()
+
         let side = max(1, cell - 4)
-        let isPressed = (draggingTileID == tile.id)
 
         ZStack {
-            if lockedOnBoard {
-                // Success/locked
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.green)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.green.opacity(0.85), lineWidth: 1)
-                    )
-            } else {
-                // Soft Raised neutral tile
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.clear)
-                    .softRaised(corner: 12, pressed: isPressed)
-            }
-
+            RoundedRectangle(cornerRadius: 8).fill(tileFillStyle)
+            RoundedRectangle(cornerRadius: 8).stroke(strokeColor, lineWidth: 1)
             Text(String(tile.letter).uppercased())
                 .font(.title3).bold()
-                .foregroundStyle(lockedOnBoard ? Color.white : Color.primary)
+                .foregroundStyle(textColor)
         }
         .frame(width: side, height: side)
         .shadow(radius: 1, x: 0, y: 1)
 
-        // Disable drag for locked tiles; allow pressed effect while dragging
+        // Block dragging for any locked-on-board tile
         .highPriorityGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
@@ -524,11 +543,11 @@ struct ContentView: View {
                 .onEnded { value in
                     guard !lockedOnBoard else { return }
                     draggingTileID = nil
-                    let stagePoint = toStage(value.location)
-                    onDragEnded?(stagePoint)
+                    onDragEnded?(toStage(value.location))
                 }
         )
     }
+
 
     @ViewBuilder
     private func tileGhost(_ tile: LetterTile, size: CGSize) -> some View {

@@ -14,25 +14,29 @@ enum DictionaryLoader {
         "mall","tall","ball","fall"
     ]
 
-    static func loadFourLetterWords() -> [String] {
-        if let url = Bundle.main.url(forResource: "words4", withExtension: "txt"),
-           let contents = try? String(contentsOf: url) {
-            let words = contents
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                .filter { $0.count == 4 && !$0.isEmpty }
-
-            if !words.isEmpty {
-                print("✅ Loaded \(words.count) words from words4.txt")
-                return words
-            } else {
-                print("⚠️ words4.txt was found but had no valid entries — using fallback")
-            }
-        } else {
-            print("⚠️ words4.txt not found in bundle — using fallback")
-        }
-
-        print("✅ Loaded \(fallbackFourLetterWords.count) fallback words")
-        return fallbackFourLetterWords
+    static func loadFourLetterWords(filename: String = "words4") -> [String] {
+        guard let url = Bundle.main.url(forResource: filename, withExtension: "txt"),
+              let raw = try? String(contentsOf: url)
+        else { return [] }
+        return raw
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { $0.count == 4 }
     }
+    
+    /// load a *world* dictionary by file stem (with or without “.txt”)
+      static func loadWorldDictionary(named stem: String) -> [String] {
+          let (name, ext) = stem.lowercased().hasSuffix(".txt")
+          ? (String(stem.dropLast(4)), "txt")
+          : (stem, "txt")
+
+          guard let url = Bundle.main.url(forResource: name, withExtension: ext),
+                let raw = try? String(contentsOf: url)
+          else { return [] }
+
+          return raw
+              .split(whereSeparator: \.isNewline)
+              .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+              .filter { $0.count == 4 }
+      }
 }

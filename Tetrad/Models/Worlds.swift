@@ -22,63 +22,64 @@ enum WorldsCatalog {
               name: "Tutorial",
               artName: "WorldCard_Tutorial",
               unlockCost: 0,
-              dictionaryID: "Tutorial_Core",
+              dictionaryID: "Adjectives_Dictionary",   // or your own tutorial list
               isTutorial: true),
 
         World(id: "food",
               name: "Food",
               artName: "WorldCard_Food",
               unlockCost: 10,
-              dictionaryID: "Food4",
+              dictionaryID: "Food_Drink_Dictionary",
               isTutorial: false),
 
         World(id: "animals",
               name: "Animals",
               artName: "WorldCard_Animals",
               unlockCost: 12,
-              dictionaryID: "Animals4",
+              dictionaryID: "Animals_Dictionary",
               isTutorial: false),
 
         World(id: "nature",
               name: "Nature",
               artName: "WorldCard_Nature",
               unlockCost: 12,
-              dictionaryID: "Nature4",
+              dictionaryID: "Plants_Dictionary",       // ← matches your file list
               isTutorial: false),
 
         World(id: "holidays",
               name: "Holidays",
               artName: "WorldCard_Holidays",
               unlockCost: 14,
-              dictionaryID: "Holidays4",
+              dictionaryID: "Places_Dictionary",       // temp until you add Holidays_Dictionary.txt
               isTutorial: false),
 
         World(id: "retro",
               name: "Retro",
               artName: "WorldCard_Retro",
               unlockCost: 14,
-              dictionaryID: "Retro4",
+              dictionaryID: "Adjectives_Dictionary",   // pick a file to use for now
               isTutorial: false),
 
         World(id: "travel",
               name: "Travel",
               artName: "WorldCard_Travel",
               unlockCost: 16,
-              dictionaryID: "Travel4",
+              dictionaryID: "Places_Dictionary",
               isTutorial: false),
 
         World(id: "history",
               name: "History",
               artName: "WorldCard_History",
               unlockCost: 16,
-              dictionaryID: "History4",
+              dictionaryID: "History_Dictionary",
               isTutorial: false),
 
         World(id: "entertainment",
               name: "Entertainment",
               artName: "WorldCard_Entertainment",
               unlockCost: 18,
-              dictionaryID: "Entertainment4",
+              dictionaryID: "Arts_Entertainment_Dictionary",
               isTutorial: false)
     ]
 }
+

@@ -2,55 +2,56 @@ import Foundation
 import SwiftUI
 
 final class GameState: ObservableObject {
+    // MARK: - Published state
     @Published var tiles: [LetterTile] = []
     @Published var board: [[UUID?]] = Array(repeating: Array(repeating: nil, count: 4), count: 4)
     @Published var solved: Bool = false
-    @Published var invalidHighlights: Set<Int> = [] // indices 0..7 for rows/cols if needed
+    @Published var invalidHighlights: Set<Int> = []   // indices 0..7 for rows/cols if needed
 
     @Published var moveCount: Int = 0
     @Published var streak: Int = UserDefaults.standard.integer(forKey: "tetrad_streak")
     @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "tetrad_lastSolvedUTC")
+
+    // Level mode & World Word flags
     @Published var isLevelMode: Bool = false
+    @Published var worldWord: String? = nil
+    @Published var worldWordIndex: Int? = nil                // 0..3 (row == col)
+    @Published var worldProtectedCoords: Set<BoardCoord> = []// union of row+col at index
+    @Published var worldLockedTileIDs: Set<UUID> = []        // tiles locked due to World Word
+    @Published var worldShimmerIDs: Set<UUID> = []           // for 2s shimmer effect on lock
+    @Published var worldWordJustCompleted: Bool = false      // flips true once when completed
+    @Published var worldIndex: Int? = nil                    // if you read it elsewhere
 
+    // Smart Boost locks (runtime + persisted-by-coord for Daily)
+    @Published var boostedLockedTileIDs: Set<UUID> = []      // runtime-only (IDs change per session)
+    private var boostedLockedCoords: Set<String> = []        // persisted as "r,c" strings
 
-    // 🟩 Smart Boost locks (runtime + persisted-by-coord)
-    @Published var boostedLockedTileIDs: Set<UUID> = []           // runtime-only (IDs change per session)
-    private var boostedLockedCoords: Set<String> = []             // persisted as "r,c" strings
-
+    // MARK: - Private state
     private let versionKey = "TETRAD_v1"
     private var identity: PuzzleIdentity?
     private var lastSmartBoostCoord: BoardCoord? = nil
+    private var solution: [String]? = nil                    // in-memory (rows)
 
-    // 🔹 In-memory cache of today's 4-word solution (rows), set during generation.
-    //     Not persisted (we can always regenerate deterministically for today).
-    private var solution: [String]? = nil
-
-    init() {
-        // Intentionally empty: we bootstrap when the user chooses to play
-    }
+    // MARK: - Lifecycle
+    init() {}
 
     // MARK: - Daily bootstrap / generation / restore
-
+    @MainActor
     func bootstrapForToday(date: Date = Date()) {
         let todayKey = currentUTCDateKey(date)
         NSLog("bootstrapForToday → \(todayKey)")
         isLevelMode = false
 
-        // 1) Always (re)compute today's identity deterministically from the UTC date.
         generateNewDailyIdentity(date: date)
 
-        // 2) Build tiles from today's bag so the board reflects today's letters.
         if let id = identity {
             buildTiles(from: id.bag)
         } else {
             NSLog("⚠️ bootstrapForToday: identity missing after generation for \(todayKey)")
         }
 
-        // 3) Restore saved progress for today if it exists; otherwise start fresh.
         restoreRunStateOrStartFresh(for: todayKey)
-
-        // 4) Reload Smart Boost locks for today and map them to current tile IDs.
-        loadBoostLocks(for: todayKey)
+        loadBoostLocks(for: todayKey) // map coord locks → tile IDs
     }
 
     private func generateNewDailyIdentity(date: Date) {
@@ -59,7 +60,6 @@ final class GameState: ObservableObject {
         var rng: any RandomNumberGenerator = SeededRNG.dailySeed(version: versionKey, date: date)
 
         if let puzzle = gen.generateDaily(rng: &rng) {
-            // Keep the row solution in memory for Boosts / validation
             self.solution = puzzle.solution
             let bag = String(puzzle.letters.map { Character($0.lowercased()) })
             identity = PuzzleIdentity(dayUTC: currentUTCDateKey(date), bag: bag)
@@ -77,9 +77,16 @@ final class GameState: ObservableObject {
         board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
         solved = false
         invalidHighlights = []
+        moveCount = 0
+
+        // Reset boost locks for the new bag (IDs change)
         lastSmartBoostCoord = nil
         boostedLockedTileIDs = []
-        boostedLockedCoords = []
+        // Do not clear boostedLockedCoords here; that persists per day-key and is loaded later.
+        // Clear world-word locks/flags; they are per-session (Level only)
+        worldLockedTileIDs.removeAll()
+        worldShimmerIDs.removeAll()
+        worldWordJustCompleted = false
     }
 
     private func restoreRunStateOrStartFresh(for todayKey: String) {
@@ -88,7 +95,7 @@ final class GameState: ObservableObject {
             solved = run.solvedToday
             streak = run.streak
 
-            // Clear board & reset tiles to bag
+            // Reset board & tiles to bag
             board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
             for i in tiles.indices {
                 var t = tiles[i]
@@ -96,7 +103,7 @@ final class GameState: ObservableObject {
                 t.hasBeenPlacedOnce = false
                 tiles[i] = t
             }
-            // Re-apply placements (consume letters from bag to handle duplicates)
+            // Re-apply placements in order (consume letters from bag)
             for p in run.placements {
                 if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
                     var t = tiles[idx]
@@ -119,25 +126,17 @@ final class GameState: ObservableObject {
         lastSmartBoostCoord = nil
         boostedLockedTileIDs = []
         boostedLockedCoords = []
-        clearBoostLocks(for: todayKey) // clean slate for the day key
-        let run = RunState(moves: 0,
-                           solvedToday: false,
-                           placements: [],
-                           streak: streak,
-                           lastPlayedDayUTC: todayKey)
+        clearBoostLocks(for: todayKey)
+        let run = RunState(moves: 0, solvedToday: false, placements: [], streak: streak, lastPlayedDayUTC: todayKey)
         Persistence.saveRunState(run)
     }
 
-    // MARK: - Existing APIs
-
+    // MARK: - Daily “new puzzle”
+    @MainActor
     func newDailyPuzzle(date: Date = Date()) {
         NSLog("🟡 newDailyPuzzle() called for \(currentUTCDateKey(date))")
-
-        // 🔎 Probe the bundled dictionary so you can see the count in Xcode’s console
         let dict = DictionaryLoader.loadFourLetterWords()
         NSLog("📚 Tetrad dictionary loaded: \(dict.count) words")
-
-        // 👇 your existing orchestration
         if let id = identity { clearBoostLocks(for: id.dayUTC) }
         Persistence.clearForNewDay()
         generateNewDailyIdentity(date: date)
@@ -145,17 +144,30 @@ final class GameState: ObservableObject {
         persistProgressSnapshot()
     }
 
+    // MARK: - Basic helpers
     func tile(at coord: BoardCoord) -> LetterTile? {
         guard let id = board[coord.row][coord.col] else { return nil }
         return tiles.first(where: { $0.id == id })
     }
 
-    func placeTile(_ tile: LetterTile, at coord: BoardCoord) {
-        // 🚫 Do not allow moving a Smart-Boost-locked tile
-        if boostedLockedTileIDs.contains(tile.id) { return }
+    private func solutionChar(at coord: BoardCoord) -> Character? {
+        guard let solution = self.solution, solution.count == 4 else { return nil }
+        let row = Array(solution[coord.row])
+        guard coord.col < row.count else { return nil }
+        return row[coord.col]
+    }
 
-        // 🚫 Do not allow displacing a Smart-Boost-locked occupant
-        if let occ = self.tile(at: coord), boostedLockedTileIDs.contains(occ.id) { return }
+    private func isCorrect(_ letter: Character, at coord: BoardCoord) -> Bool {
+        solutionChar(at: coord) == letter
+    }
+
+    // MARK: - Placement / removal
+    @MainActor
+    func placeTile(_ tile: LetterTile, at coord: BoardCoord) {
+        // 🚫 Cannot move a locked tile, and cannot displace a locked occupant.
+        if boostedLockedTileIDs.contains(tile.id) || worldLockedTileIDs.contains(tile.id) { return }
+        if let occ = self.tile(at: coord),
+           boostedLockedTileIDs.contains(occ.id) || worldLockedTileIDs.contains(occ.id) { return }
 
         var t = tile
         var isMove = false
@@ -171,6 +183,7 @@ final class GameState: ObservableObject {
             }
         }
 
+        // Bounce occupant (no move counted for bounced tile)
         if let occupying = self.tile(at: coord) {
             if case .board(let prev) = tile.location {
                 moveTileTo(occupying, to: .board(prev), countAsMove: false)
@@ -179,27 +192,50 @@ final class GameState: ObservableObject {
             }
         }
 
+        // Commit placement
         t.location = .board(coord)
-        if let idx = tiles.firstIndex(where: { $0.id == t.id }) {
-            tiles[idx] = t
-        }
+        if let idx = tiles.firstIndex(where: { $0.id == t.id }) { tiles[idx] = t }
         board[coord.row][coord.col] = t.id
+
+        // 🔒 Auto-lock for World Word cells when correct
+        if worldProtectedCoords.contains(coord),
+           let sol = solution, sol.count == 4 {
+            let expected = Array(sol[coord.row])[coord.col]
+            if expected == t.letter {
+                worldLockedTileIDs.insert(t.id)
+                NSLog("🔒 World-lock at (\(coord.row),\(coord.col)) letter \(t.letter) id=\(t.id)")
+
+                worldShimmerIDs.insert(t.id)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                    self?.worldShimmerIDs.remove(t.id)
+                }
+                checkWorldWordComplete()
+            }
+        }
 
         if isMove { moveCount += 1 }
         checkIfSolved()
         persistProgressSnapshot()
     }
 
+    @MainActor
     func removeTile(from coord: BoardCoord) {
         guard let id = board[coord.row][coord.col],
               let idx = tiles.firstIndex(where: { $0.id == id }) else { return }
-        // 🚫 Can't remove Smart-Boost-locked tile
-        if boostedLockedTileIDs.contains(id) { return }
+
+        // 🚫 Do not remove if locked by Boost or World Word
+        if boostedLockedTileIDs.contains(id) || worldLockedTileIDs.contains(id) { return }
 
         var t = tiles[idx]
         t.location = .bag
         tiles[idx] = t
         board[coord.row][coord.col] = nil
+
+        // If removing affects the World Word completion, recompute banner state
+        if worldProtectedCoords.contains(coord) {
+            checkWorldWordComplete()
+        }
+
         persistProgressSnapshot()
     }
 
@@ -218,6 +254,7 @@ final class GameState: ObservableObject {
         if countAsMove { moveCount += 1 }
     }
 
+    // MARK: - Solved / streak
     func shareString(date: Date = Date()) -> String {
         let utc = ISO8601DateFormatter()
         utc.timeZone = TimeZone(secondsFromGMT: 0)
@@ -231,25 +268,19 @@ final class GameState: ObservableObject {
     }
 
     private func checkIfSolved() {
-        // Need today's solution to validate
         guard let solution = self.solution, solution.count == 4 else { return }
 
-        // Board must be fully filled AND match the exact 4×4 solution letters
         for r in 0..<4 {
             for c in 0..<4 {
-                // Must have a tile in every cell
                 guard let id = board[r][c],
                       let tile = tiles.first(where: { $0.id == id }) else {
                     return
                 }
                 let correctChar = Array(solution[r])[c]
-                if tile.letter != correctChar {
-                    return // any mismatch → not solved
-                }
+                if tile.letter != correctChar { return }
             }
         }
 
-        // All 16 matched
         solved = true
 
         // Only Daily mode updates streak & daily persistence
@@ -258,8 +289,6 @@ final class GameState: ObservableObject {
             registerSolvedAndPersist()
         }
     }
-
-
 
     private func advanceStreakIfNeeded() {
         let fmt = ISO8601DateFormatter()
@@ -283,8 +312,142 @@ final class GameState: ObservableObject {
         UserDefaults.standard.set(lastSolvedDateUTC, forKey: "tetrad_lastSolvedUTC")
     }
 
-    // MARK: - Persistence snapshots
+    // MARK: - World-word helpers (completion / protection)
+    @MainActor
+    private func checkWorldWordComplete() {
+        guard !worldProtectedCoords.isEmpty else { return }
 
+        for coord in worldProtectedCoords {
+            guard let id = board[coord.row][coord.col],
+                  let tile = tiles.first(where: { $0.id == id }),
+                  isCorrect(tile.letter, at: coord) else {
+                worldWordJustCompleted = false
+                return
+            }
+        }
+
+        if worldWordJustCompleted == false {
+            worldWordJustCompleted = true
+            NSLog("✨ World Word complete: \(worldWord ?? "(unknown)") at index \(worldWordIndex ?? -1)")
+        }
+    }
+
+    /// Legacy helper → route to protection builder (kept to avoid breaking callers).
+    func setWorldIndex(_ k: Int?) {
+        setWorldWordProtection(index: k)
+    }
+
+    /// Build or clear protection (row k + col k)
+    func setWorldWordProtection(index k: Int?) {
+        worldLockedTileIDs.removeAll()
+        worldShimmerIDs.removeAll()
+        worldWordJustCompleted = false
+        worldIndex = k
+
+        guard let k else {
+            worldProtectedCoords.removeAll()
+            return
+        }
+        var s = Set<BoardCoord>()
+        for i in 0..<4 {
+            s.insert(.init(row: k, col: i))
+            s.insert(.init(row: i, col: k))
+        }
+        worldProtectedCoords = s
+    }
+
+    // MARK: - Level session (theme-aware)
+    /// Starts a *Level* game using a world dictionary + base list.
+    /// We try several attempts to produce a square that includes at least
+    /// one word from the world list; that one becomes the "World Word" (row==col).
+    @MainActor
+    func startLevelSession(seed: UInt64, dictionaryID: String) {
+        isLevelMode = true
+        moveCount = 0
+        solved = false
+
+        // Clear world state for a fresh level
+        worldWord = nil
+        worldWordIndex = nil
+        worldProtectedCoords.removeAll()
+        worldLockedTileIDs.removeAll()
+        worldShimmerIDs.removeAll()
+        worldWordJustCompleted = false
+        lastSmartBoostCoord = nil
+        boostedLockedTileIDs.removeAll() // boosts are level-local
+
+        // Load dictionaries (normalize to lowercase 4-letter)
+        let baseRaw = DictionaryLoader.loadFourLetterWords()
+        let base = baseRaw.map { $0.lowercased() }.filter { $0.count == 4 && $0.allSatisfy(\.isLetter) }
+
+        let themedRaw = DictionaryLoader.loadWorldDictionary(named: dictionaryID)
+        let themed = themedRaw.map { $0.lowercased() }.filter { $0.count == 4 && $0.allSatisfy(\.isLetter) }
+        let themedSet = Set(themed)
+
+        let all = Array(Set(base).union(themedSet))
+        let gen = WordSquareGenerator(words: all)
+
+        var foundSolution: [String]? = nil
+        var foundLetters: [Character]? = nil
+        var theWorldIndex: Int? = nil
+        var usedThemedWord = false
+
+        // Try a number of attempts to find a solution that includes a themed word
+        for attempt in 0..<120 {
+            var rng: any RandomNumberGenerator = SystemRandomNumberGenerator()
+            if let puzzle = gen.generateDaily(rng: &rng) {
+                if let idx = puzzle.solution.firstIndex(where: { themedSet.contains($0) }) {
+                    foundSolution = puzzle.solution
+                    foundLetters  = puzzle.letters
+                    theWorldIndex = idx
+                    usedThemedWord = true
+                    break
+                }
+                if foundSolution == nil {
+                    foundSolution = puzzle.solution
+                    foundLetters  = puzzle.letters
+                    theWorldIndex = Int((seed &+ UInt64(attempt)) % 4) // stable-ish fallback
+                }
+            }
+        }
+
+        guard
+            let solution = foundSolution,
+            let letters  = foundLetters,
+            let wIndex   = theWorldIndex
+        else {
+            NSLog("❌ Level start failed; falling back to Daily bootstrap")
+            bootstrapForToday()
+            return
+        }
+
+        if themedSet.isEmpty {
+            NSLog("⚠️ Level start (\(dictionaryID)): themed set is empty; generic square used.")
+        } else if !usedThemedWord {
+            NSLog("ℹ️ Level start (\(dictionaryID)): no themed word hit after attempts; using fallback square.")
+        } else {
+            NSLog("✅ Level start (\(dictionaryID)): world word = \(solution[wIndex]) @ index \(wIndex)")
+        }
+
+        // Record solution + build tiles/bag
+        self.solution = solution
+        let bag = String(letters) // letters already lowercased characters
+        self.identity = PuzzleIdentity(dayUTC: "LEVEL-\(seed)", bag: bag)
+        buildTiles(from: bag)
+
+        // Mark the World Word & protect its row/col
+        self.worldWord = solution[wIndex]
+        self.worldWordIndex = wIndex
+
+        var coords: Set<BoardCoord> = []
+        for c in 0..<4 { coords.insert(.init(row: wIndex, col: c)) }
+        for r in 0..<4 { coords.insert(.init(row: r, col: wIndex)) }
+        self.worldProtectedCoords = coords  // ⬅️ IMPORTANT (was commented before)
+
+        persistProgressSnapshot()
+    }
+
+    // MARK: - Persistence snapshots
     private func persistProgressSnapshot() {
         guard let id = identity else { return }
         var placements: [TilePlacement] = []
@@ -302,83 +465,68 @@ final class GameState: ObservableObject {
                            lastPlayedDayUTC: id.dayUTC)
         Persistence.saveIdentity(id)
         Persistence.saveRunState(run)
-
-        // Also persist Smart Boost locks (by coord) whenever we snapshot
-        persistBoostLocks()
+        persistBoostLocks() // keep daily boost locks in sync
     }
 
     private func registerSolvedAndPersist() {
         guard let id = identity else { return }
-        if var run = Persistence.loadRunState() {
-            if !run.solvedToday {
-                run.solvedToday = true
-                run.moves = moveCount
-                run.streak = streak
-                run.lastPlayedDayUTC = id.dayUTC
-                Persistence.saveRunState(run)
-            }
+        if var run = Persistence.loadRunState(), !run.solvedToday {
+            run.solvedToday = true
+            run.moves = moveCount
+            run.streak = streak
+            run.lastPlayedDayUTC = id.dayUTC
+            Persistence.saveRunState(run)
         }
         persistProgressSnapshot()
     }
 }
 
-// MARK: - Smart Boost (auto with non-adjacent preference)
-
+// MARK: - Smart Boost (auto, non-adjacent preference, avoids World Word cells)
 extension GameState {
-    /// Reveals (places) one correct tile at a random eligible coord.
-    /// Prefers coords that are NOT orthogonally adjacent to the last auto-boost;
-    /// falls back to adjacent if no other options exist.
-    /// Applies +movePenalty (without adding a normal move) and persists.
+    @MainActor
     func applySmartBoost(movePenalty: Int) -> Bool {
         guard let solution = self.solution, solution.count == 4 else {
             NSLog("SmartBoost(auto): no solution cached for today")
             return false
         }
 
-        // Bag availability (handles duplicates)
+        // Bag availability
         var bagCounts: [Character: Int] = [:]
-        for t in tiles where t.location == .bag {
-            bagCounts[t.letter, default: 0] += 1
-        }
+        for t in tiles where t.location == .bag { bagCounts[t.letter, default: 0] += 1 }
 
-        // Build candidate coords: not already correct AND needed letter is in the bag
+        // Candidates: not already correct, available in bag, and not in protected world cells
         var candidates: [BoardCoord] = []
         for r in 0..<4 {
             let rowChars = Array(solution[r])
             for c in 0..<4 {
                 let coord = BoardCoord(row: r, col: c)
+                if worldProtectedCoords.contains(coord) { continue } // avoid World Word cells
                 let needed = rowChars[c]
-
                 if let existing = tile(at: coord), existing.letter == needed { continue }
                 guard let count = bagCounts[needed], count > 0 else { continue }
                 candidates.append(coord)
             }
         }
-
         guard !candidates.isEmpty else { return false }
 
-        // Prefer non-adjacent to the last placement; fallback to all if none
+        // Prefer non-adjacent to last placement
         let pool: [BoardCoord]
         if let last = lastSmartBoostCoord {
-            let nonAdjacent = candidates.filter { !isAdjacent($0, last) }
-            pool = nonAdjacent.isEmpty ? candidates : nonAdjacent
+            let nonAdj = candidates.filter { abs($0.row - last.row) + abs($0.col - last.col) != 1 }
+            pool = nonAdj.isEmpty ? candidates : nonAdj
         } else {
             pool = candidates
         }
-
         guard let chosen = pool.randomElement() else { return false }
 
-        // Place the correct letter at `chosen` (no normal move counted)
         let needed = Array(solution[chosen.row])[chosen.col]
 
-        // If target is occupied, move that tile back to bag first
-        if let occupying = tile(at: chosen) {
-            // If occupant is locked (shouldn't happen), block boost (safety)
-            if boostedLockedTileIDs.contains(occupying.id) { return false }
-            moveTileTo(occupying, to: .bag, countAsMove: false)
+        // Clear occupant (safety: do not dislodge a locked piece)
+        if let occ = tile(at: chosen) {
+            if boostedLockedTileIDs.contains(occ.id) || worldLockedTileIDs.contains(occ.id) { return false }
+            moveTileTo(occ, to: .bag, countAsMove: false)
         }
 
-        // Find the actual bag tile with the needed letter
         guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
             return false
         }
@@ -391,7 +539,7 @@ extension GameState {
         moveCount += movePenalty
         lastSmartBoostCoord = chosen
 
-        // 🟩 Mark as locked (runtime + persisted by coord)
+        // Lock the boosted tile and persist by coord (Daily)
         boostedLockedTileIDs.insert(chosenTile.id)
         boostedLockedCoords.insert(coordKey(chosen))
         persistBoostLocks()
@@ -400,49 +548,9 @@ extension GameState {
         persistProgressSnapshot()
         return true
     }
-
-    // Helper: 4-neighbor (orthogonal) adjacency
-    private func isAdjacent(_ a: BoardCoord, _ b: BoardCoord) -> Bool {
-        abs(a.row - b.row) + abs(a.col - b.col) == 1
-    }
 }
 
-// MARK: - Levels: start a session from a seed (prototype 4×4)
-extension GameState {
-    /// Starts a level session from a fixed seed. Does NOT touch Daily persistence.
-    /// For now this uses your 4-letter dictionary; theme dictionaries come later.
-    func startLevelSession(seed: UInt64, dictionaryID: String? = nil) {
-        isLevelMode = true
-        moveCount = 0
-        solved = false
-        invalidHighlights = []
-        lastSmartBoostCoord = nil
-        boostedLockedTileIDs.removeAll()
-
-        // Load words (later: switch on dictionaryID)
-        let words = DictionaryLoader.loadFourLetterWords()
-        let gen = WordSquareGenerator(words: words)
-
-        // Reuse your seeded RNG helper to get determinism from a seed via Date
-        let date = Date(timeIntervalSince1970: TimeInterval(seed % 31_536_000)) // ~1y cycle
-        var rng: any RandomNumberGenerator = SeededRNG.dailySeed(version: "LEVEL_v1", date: date)
-
-        if let puzzle = gen.generateDaily(rng: &rng) {
-            self.solution = puzzle.solution
-            let bag = String(puzzle.letters.map { Character($0.lowercased()) })
-            buildTiles(from: bag) // resets board & tiles; no run-state save
-        } else {
-            // Fallback (rare)
-            let fallback = Array("tetradwordpuzzlega".prefix(16))
-            buildTiles(from: String(fallback))
-            self.solution = nil
-        }
-    }
-}
-
-
-// MARK: - Boost lock persistence (by coord)
-
+// MARK: - Boost lock persistence (by coord for Daily)
 extension GameState {
     private func lockKey(for dayUTC: String) -> String { "tetrad_locks_\(dayUTC)" }
     private func coordKey(_ coord: BoardCoord) -> String { "\(coord.row),\(coord.col)" }
@@ -463,7 +571,6 @@ extension GameState {
         let arr = (UserDefaults.standard.array(forKey: key) as? [String]) ?? []
         boostedLockedCoords = Set(arr)
 
-        // Map coords → current tile IDs (IDs change across sessions)
         boostedLockedTileIDs.removeAll()
         for s in boostedLockedCoords {
             if let coord = parseCoordKey(s), let t = tile(at: coord) {
