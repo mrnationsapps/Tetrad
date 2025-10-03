@@ -22,6 +22,8 @@ final class GameState: ObservableObject {
     @Published var worldWordJustCompleted: Bool = false      // flips true once when completed
     @Published var worldIndex: Int? = nil                    // if you read it elsewhere
 
+
+
     // Smart Boost locks (runtime + persisted-by-coord for Daily)
     @Published var boostedLockedTileIDs: Set<UUID> = []      // runtime-only (IDs change per session)
     private var boostedLockedCoords: Set<String> = []        // persisted as "r,c" strings
@@ -199,19 +201,32 @@ final class GameState: ObservableObject {
 
         // 🔒 Auto-lock for World Word cells when correct
         if worldProtectedCoords.contains(coord),
-           let sol = solution, sol.count == 4 {
+           let sol = solution, sol.count == 4
+        {
+            // If case might differ between solution and tiles, normalize:
             let expected = Array(sol[coord.row])[coord.col]
-            if expected == t.letter {
-                worldLockedTileIDs.insert(t.id)
-                NSLog("🔒 World-lock at (\(coord.row),\(coord.col)) letter \(t.letter) id=\(t.id)")
+            // let matches = String(expected).uppercased().first! == String(t.letter).uppercased().first!
+            let matches = (expected == t.letter)  // keep if your data already matches case
 
-                worldShimmerIDs.insert(t.id)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                    self?.worldShimmerIDs.remove(t.id)
+            if matches {
+                // Insert returns (inserted: Bool, memberAfterInsert: Element)
+                let justLocked = worldLockedTileIDs.insert(t.id).inserted
+                if justLocked {
+                    NSLog("🔒 World-lock at (\(coord.row),\(coord.col)) letter \(t.letter) id=\(t.id)")
+
+                    // 2s shimmer (one-shot)
+                    worldShimmerIDs.insert(t.id)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                        self?.worldShimmerIDs.remove(t.id)
+                    }
                 }
+
+                // This can remain outside the justLocked guard so the “complete” check
+                // runs even if the last cell was already locked (e.g., resume).
                 checkWorldWordComplete()
             }
         }
+
 
         if isMove { moveCount += 1 }
         checkIfSolved()
@@ -289,7 +304,7 @@ final class GameState: ObservableObject {
             registerSolvedAndPersist()
         }
     }
-
+    
     private func advanceStreakIfNeeded() {
         let fmt = ISO8601DateFormatter()
         fmt.timeZone = .init(secondsFromGMT: 0)

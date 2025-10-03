@@ -309,6 +309,7 @@ struct ContentView: View {
                 boardGrid(cell: cell, gap: gap, boardSize: boardSize)
             }
             .frame(width: boardSize, height: boardSize, alignment: .topLeading)
+            
             // publish live layout info for snapping & conversion
             .onAppear {
                 currentBoardCell     = cell
@@ -520,13 +521,33 @@ struct ContentView: View {
         }()
 
         let side = max(1, cell - 4)
+        let corner: CGFloat = 8
 
         ZStack {
-            RoundedRectangle(cornerRadius: 8).fill(tileFillStyle)
-            RoundedRectangle(cornerRadius: 8).stroke(strokeColor, lineWidth: 1)
+            // Base tile
+            RoundedRectangle(cornerRadius: corner).fill(tileFillStyle)
+            RoundedRectangle(cornerRadius: corner).stroke(strokeColor, lineWidth: 1)
+
+            // Letter
             Text(String(tile.letter).uppercased())
                 .font(.title3).bold()
                 .foregroundStyle(textColor)
+
+            // 2s SHIMMER ON PURPLE-LOCKED TILES
+            if game.worldShimmerIDs.contains(tile.id) {
+                ShimmerOverlay(
+                    duration: 1.5,
+                    bandScale: 1.4,  // width
+                    minBand: 10,
+                    thickness: 24,   // height
+                    angleDeg: 0,
+                    peakOpacity: 0.45,
+                    overscan: 60
+                )
+                .clipShape(RoundedRectangle(cornerRadius: corner))
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
         }
         .frame(width: side, height: side)
         .shadow(radius: 1, x: 0, y: 1)
@@ -547,6 +568,226 @@ struct ContentView: View {
                 }
         )
     }
+
+
+
+    // Diagonal sheen that sweeps once over `duration` seconds
+    private struct ShimmerOverlay: View {
+        var duration: Double = 2.0
+
+        // existing knobs
+        var bandScale: CGFloat = 1.2     // width as a multiple of tile width
+        var minBand:   CGFloat = 10
+        var thickness: CGFloat = 24      // still used (adds on top)
+        var angleDeg:  Double  = 24
+        var peakOpacity: Double = 0.45
+
+        // NEW: extra padding on top of the computed minimum
+        var overscan: CGFloat = 24
+
+        @State private var run = false
+
+        var body: some View {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                let band = max(minBand, w * bandScale)
+
+                // Height required to cover the tile when the band is rotated by angleDeg:
+                // hNeeded = |w*sinθ| + |h*cosθ|  (bounding box of a rotated rect)
+                let θ = CGFloat(angleDeg) * .pi / 180
+                let coverHeight = abs(w * sin(θ)) + abs(h * cos(θ))
+
+                // Add some headroom so you never see the top/bottom edge
+                let neededHeight = coverHeight + band * 0.25 + thickness + overscan
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.0), .white.opacity(peakOpacity), .white.opacity(0.0)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                    .frame(width: band, height: neededHeight)
+                    .rotationEffect(.degrees(angleDeg))
+                    .offset(x: run ? w + band : -band)
+                    .onAppear { withAnimation(.linear(duration: duration)) { run = true } }
+            }
+        }
+    }
+
+    private enum TraceAxis { case horizontal, vertical }
+
+    private struct LineTracer: View {
+        var direction: TraceAxis
+        var tint: Color = .white
+        var duration: Double = 0.45
+        var lineWidth: CGFloat = 6
+        var tailDots: Int = 5
+        var tailSpacing: CGFloat = 0.12
+        var wobble: CGFloat = 1.5
+
+        @State private var phase: CGFloat = 0   // 0 → 1 across the tile
+
+        var body: some View {
+            GeometryReader { geo in
+                TracerCanvas(
+                    direction: direction,
+                    tint: tint,
+                    lineWidth: lineWidth,
+                    tailDots: tailDots,
+                    tailSpacing: tailSpacing,
+                    wobble: wobble,
+                    phase: phase
+                )
+                .onAppear {
+                    phase = 0
+                    withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
+                        phase = 1
+                    }
+                }
+            }
+        }
+    }
+
+    private struct TracerCanvas: View {
+        var direction: TraceAxis
+        var tint: Color
+        var lineWidth: CGFloat
+        var tailDots: Int
+        var tailSpacing: CGFloat
+        var wobble: CGFloat
+        var phase: CGFloat
+
+        var body: some View {
+            Canvas { ctx, size in
+                var ctx = ctx // allow passing as inout to helpers
+                let span = spanLength(size)
+                guard span > 0 else { return }
+
+                let pos = phase * span
+                let bar = coreBarRect(size: size, pos: pos)
+
+                drawCoreBar(ctx: &ctx, bar: bar)
+                drawTail(ctx: &ctx, size: size, pos: pos, span: span)
+            }
+        }
+
+        // MARK: - Helpers (small, explicit → fast type-check)
+
+        private func spanLength(_ size: CGSize) -> CGFloat {
+            direction == .horizontal ? size.width : size.height
+        }
+
+        private func coreBarRect(size: CGSize, pos: CGFloat) -> CGRect {
+            if direction == .horizontal {
+                return CGRect(x: pos - lineWidth/2, y: 0, width: lineWidth, height: size.height)
+            } else {
+                return CGRect(x: 0, y: pos - lineWidth/2, width: size.width, height: lineWidth)
+            }
+        }
+
+        private func coreGradient(for rect: CGRect) -> GraphicsContext.Shading {
+            let grad = Gradient(colors: [tint.opacity(0.0), tint.opacity(0.85), tint.opacity(0.0)])
+            if direction == .horizontal {
+                return .linearGradient(
+                    grad,
+                    startPoint: CGPoint(x: rect.minX, y: 0),
+                    endPoint:   CGPoint(x: rect.maxX, y: 0)
+                )
+            } else {
+                return .linearGradient(
+                    grad,
+                    startPoint: CGPoint(x: 0, y: rect.minY),
+                    endPoint:   CGPoint(x: 0, y: rect.maxY)
+                )
+            }
+        }
+
+        private func drawCoreBar(ctx: inout GraphicsContext, bar: CGRect) {
+            ctx.fill(Path(bar), with: coreGradient(for: bar))
+        }
+
+        private func tailDot(at k: Int, pos: CGFloat, span: CGFloat, size: CGSize) -> (CGRect, Double) {
+            let back = CGFloat(k) * tailSpacing * span
+            let alpha = max(0, 1 - CGFloat(k) * 0.22)
+
+            // gentle perpendicular wobble
+            let angle = Double((pos - back) / max(1, span)) * 2.0 * .pi
+            let wob = CGFloat(sin(angle)) * wobble
+
+            let r: CGFloat = 2.0 * max(0.6, alpha)
+
+            if direction == .horizontal {
+                let x = pos - back
+                let y = size.height * 0.5 + wob
+                return (CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2), Double(alpha) * 0.9)
+            } else {
+                let x = size.width * 0.5 + wob
+                let y = pos - back
+                return (CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2), Double(alpha) * 0.9)
+            }
+        }
+
+        private func drawTail(ctx: inout GraphicsContext, size: CGSize, pos: CGFloat, span: CGFloat) {
+            guard tailDots > 0 else { return }
+            for k in 1...tailDots {
+                let (rect, a) = tailDot(at: k, pos: pos, span: span, size: size)
+                ctx.opacity = a
+                ctx.fill(Path(ellipseIn: rect), with: .color(tint))
+            }
+        }
+    }
+
+
+
+    // Soft purple glow for the trace pass
+    private struct TraceGlow: View {
+        var body: some View {
+            ZStack {
+                // Outer bloom
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.purple.opacity(0.18))
+                    .blur(radius: 8)
+
+                // Inner edge highlight
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
+                    .blur(radius: 0.5)
+            }
+        }
+    }
+
+    // Small sparkle burst used during the trace pass
+    private struct SparkleBurst: View {
+        var tint: Color = .white
+        var body: some View {
+            TimelineView(.periodic(from: Date(), by: 1.0 / 60.0)) { tl in
+                let tAbs = tl.date.timeIntervalSinceReferenceDate
+                Canvas { ctx, size in
+                    let cx = size.width / 2, cy = size.height / 2
+                    let count = 10
+                    let lifetime: Double = 0.6
+
+                    for i in 0..<count {
+                        let stagger = Double(i) * 0.025
+                        let t = max(0, min(1, (tAbs - stagger).truncatingRemainder(dividingBy: lifetime) / lifetime))
+                        let theta = Double(i) * (.pi * 2) / Double(count)
+                        let r = CGFloat(t) * (min(size.width, size.height) * 0.45)
+                        let x = cx + CGFloat(cos(theta)) * r
+                        let y = cy + CGFloat(sin(theta)) * r
+                        let alpha = (1 - t) * 0.9
+
+                        ctx.opacity = alpha
+                        let dotR: CGFloat = 1.6
+                        let rect = CGRect(x: x - dotR, y: y - dotR, width: dotR * 2, height: dotR * 2)
+                        ctx.fill(Path(ellipseIn: rect), with: .color(tint))
+                    }
+                }
+            }
+        }
+    }
+
 
 
     @ViewBuilder

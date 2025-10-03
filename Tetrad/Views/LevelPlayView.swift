@@ -19,15 +19,16 @@ struct LevelPlayView: View {
     @State private var pendingWinDelay = false
     @State private var bannerSize: CGSize = .zero
 
-    // MARK: - Body (small and simple)
+    // MARK: - Body
     var body: some View {
         ZStack {
             boardLayer
             bannerLayer
         }
+        // 1) particle aura
         .overlay(auraOverlay, alignment: .center)
-        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
 
+        .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
         .navigationBarBackButtonHidden(true)
         .toolbar { levelToolbar }
 
@@ -37,12 +38,14 @@ struct LevelPlayView: View {
             startNewSession()
         }
 
-        .onChange(of: game.worldWordJustCompleted) { justCompleted in
+        // World word completed → show banner
+        .onChange(of: game.worldWordJustCompleted) { _, justCompleted in
             guard justCompleted else { return }
             triggerWorldBanner()
         }
 
-        .onChange(of: game.solved) { isSolved in
+        // Solve handling (delay if banner also firing)
+        .onChange(of: game.solved) { _, isSolved in
             guard isSolved && game.isLevelMode else { return }
             if showWorldBanner || pendingWinDelay {
                 pendingWinDelay = true
@@ -55,10 +58,11 @@ struct LevelPlayView: View {
             }
         }
 
+        // 3) win overlay
         .overlay(winOverlay)
     }
 
-    // MARK: - Layers split out to keep type-checker happy
+    // MARK: - Layers (kept small to help the type-checker)
 
     @ViewBuilder private var boardLayer: some View {
         ContentView(skipDailyBootstrap: true, enableDailyWinUI: false)
@@ -74,7 +78,9 @@ struct LevelPlayView: View {
                 GeometryReader { g in
                     Color.clear
                         .onAppear { bannerSize = g.size }
-                        .onChange(of: g.size) { newSize in bannerSize = newSize }
+                        .onChange(of: g.size) { _, newSize in
+                            bannerSize = newSize
+                        }
                 }
             )
             .transition(
@@ -92,7 +98,7 @@ struct LevelPlayView: View {
         if showWorldBanner, bannerSize != .zero {
             let auraPadding: CGFloat = 50   // distance outside the pill
             ParticleAura(
-                padding: 10,                  // small inset inside aura frame
+                padding: 10,                 // small inset inside aura frame
                 count: 18,
                 speed: 0.45,
                 size: 6.0,
@@ -200,6 +206,14 @@ struct LevelPlayView: View {
     }
 
     // MARK: - Helpers
+
+    private func worldIndexK() -> Int? {
+        let rows = game.worldProtectedCoords.map(\.row)
+        guard !rows.isEmpty else { return nil }
+        let counts = Dictionary(grouping: rows, by: { $0 }).mapValues(\.count)
+        return counts.max(by: { $0.value < $1.value })?.key
+    }
+
     private func startNewSession() {
         let idx  = levels.levelIndex(for: world)
         par      = levels.levelPar(for: world, levelIndex: idx)
@@ -279,9 +293,8 @@ struct LevelPlayView: View {
     }
 }
 
-// MARK: - Particle Aura (robust; clamped wiggle + periodic ticks + tint)
+// MARK: - Particle Aura (unchanged from your file)
 private struct ParticleAura: View {
-    // padding = inset from the AURA FRAME edge (not distance from banner)
     var padding: CGFloat = 10
     var count: Int = 12
     var speed: Double = 0.6
@@ -290,8 +303,6 @@ private struct ParticleAura: View {
     var tailScale2: CGFloat = 0.50
     var tint: Color = .white
     var blendNormal: Bool = true
-
-    // Wiggle
     var wiggle: CGFloat = 1.0
     var radialJitter: CGFloat = 12
     var speedJitter: Double = 0.25
@@ -321,7 +332,6 @@ private struct ParticleAura: View {
             let w = geo.size.width
             let h = geo.size.height
 
-            // Inner radius the orbit must stay within (so it can’t clip)
             let rxInner = max(0, w / 2 - padding)
             let ryInner = max(0, h / 2 - padding)
             let edgeGuard = max(size * 1.5, 2)
@@ -332,7 +342,6 @@ private struct ParticleAura: View {
                 Canvas { ctx, sz in
                     ctx.blendMode = blendNormal ? .normal : .plusLighter
 
-                    // Fallback so first frame still draws if params not seeded yet
                     let ps = (params.count == count) ? params :
                         (0..<count).map { i in
                             Param(phase0: Double(i) * .pi * 2 / Double(max(1, count)),
@@ -353,21 +362,18 @@ private struct ParticleAura: View {
                         let wobble = sin(t * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp
                         let a = base + wobble
 
-                        // Clamp wiggle inside the inner radius so it never escapes the canvas
                         let rx = max(0, min(rxInner - edgeGuard, rxInner + p.radiusOffset))
                         let ry = max(0, min(ryInner - edgeGuard, ryInner + p.radiusOffset))
 
                         let x = cx + cos(a) * rx
                         let y = cy + sin(a) * ry
 
-                        // main sparkle
                         let r: CGFloat = size
                         var dot = Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
                         let flicker = 0.35 + 0.25 * (0.5 + 0.5 * sin(t * 1.2 + Double(i)))
                         ctx.opacity = flicker
                         ctx.fill(dot, with: .color(tint))
 
-                        // tails
                         for k in 1...2 {
                             let trailA = a - Double(k) * 0.12
                             let tx = cx + cos(trailA) * rx
@@ -382,7 +388,7 @@ private struct ParticleAura: View {
             }
         }
         .onAppear { if params.count != count { params = makeParams(count) } }
-        .onChange(of: count) { newCount in params = makeParams(newCount) }
+        .onChange(of: count) { _, newCount in params = makeParams(newCount) }
         .allowsHitTesting(false)
     }
 }
