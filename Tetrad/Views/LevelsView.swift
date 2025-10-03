@@ -1,5 +1,10 @@
 import SwiftUI
 
+private enum WorldRoute: Hashable {
+    case tutorial(World.ID)
+    case level(World.ID)
+}
+
 struct LevelsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var game: GameState
@@ -91,6 +96,7 @@ struct LevelsView: View {
                     .softRaisedCapsule()
                 }
             }
+        
             // alerts
             .alert("Not enough coins", isPresented: $showInsufficientCoins) {
                 Button("OK", role: .cancel) { }
@@ -147,29 +153,48 @@ struct LevelsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: rows, alignment: .top, spacing: 8) {
                     ForEach(levels.worlds) { world in
-                        WorldCard(
-                            world: world,
-                            selected: world.id == levels.selectedWorldID,
-                            unlocked: levels.isUnlocked(world),
-                            coins: levels.coins,
-                            onTap: {
+                        if levels.isUnlocked(world) {
+                            NavigationLink {
+                                destinationView(for: world)      // Tutorial vs normal
+                                    .onAppear { levels.select(world) } // keep selection highlight
+                            } label: {
+                                WorldCard(
+                                    world: world,
+                                    selected: world.id == levels.selectedWorldID,
+                                    unlocked: true,
+                                    coins: levels.coins
+                                    // onTap omitted → nil → no internal gesture
+                                )
+                                .frame(width: cardSize.width, height: cardSize.height)
+                            }
+                            .buttonStyle(.plain) // keep label look
+
+                        } else {
+                            Button {
                                 levels.select(world)
-                                if levels.isUnlocked(world) {
-                                    levelWorld = world
-                                    navigateToLevel = true
-                                } else if levels.coins >= world.unlockCost {
+                                if levels.coins >= world.unlockCost {
                                     pendingUnlockWorld = world
                                     showConfirmUnlock = true
                                 } else {
                                     showInsufficientCoins = true
                                 }
+                            } label: {
+                                WorldCard(
+                                    world: world,
+                                    selected: world.id == levels.selectedWorldID,
+                                    unlocked: false,
+                                    coins: levels.coins
+                                    // outer Button handles the tap
+                                )
+                                .frame(width: cardSize.width, height: cardSize.height)
                             }
-                        )
-                        .frame(width: cardSize.width, height: cardSize.height)
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
                 .frame(height: (cardSize.height * 3) + (rowSpacing * 2))
                 .padding(.vertical, 8)
+                .zIndex(1) // keep the grid above any decorative overlays
             }
         }
     }
@@ -280,7 +305,19 @@ struct LevelsView: View {
         }
     }
 
+    @ViewBuilder
+    private func destinationView(for world: World) -> some View {
+        if world.isTutorial {
+            TutorialWorldView(world: world)
+                .environmentObject(levels)
+        } else {
+            LevelPlayView(world: world)
+                .environmentObject(game)
+                .environmentObject(levels)
+        }
+    }
 
+    
     // MARK: Small pill components
     @ViewBuilder
     private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
@@ -359,56 +396,66 @@ private struct WorldCard: View {
     let selected: Bool
     let unlocked: Bool
     let coins: Int
-    let onTap: () -> Void
+    var onTap: (() -> Void)? = nil   // optional: when nil, no gesture is attached
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let art = world.artName, UIImage(named: art) != nil {
-                    Image(art).resizable().scaledToFill().clipped()
-                } else {
-                    LinearGradient(
-                        colors: [.blue.opacity(0.35), .purple.opacity(0.35)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                }
-
-                VStack {
-                    HStack {
-                        Spacer()
-                        if !unlocked {
-                            HStack(spacing: 6) {
-                                Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                                Text("\(world.unlockCost)").font(.footnote).bold()
-                            }
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(.ultraThinMaterial, in: Capsule())
-                        }
-                    }
-                    .padding(8)
-
-                    Spacer()
-
-                    Text(world.name)
-                        .font(.headline).bold()
-                        .shadow(radius: 2)
-                        .padding(.bottom, 10)
-                }
-                .foregroundStyle(.white)
-
-                if !unlocked {
-                    Color.black.opacity(0.35)
-                    Image(systemName: "lock.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(selected ? Color.accentColor : .clear, lineWidth: 3)
+        let card = ZStack {
+            if let art = world.artName, UIImage(named: art) != nil {
+                Image(art).resizable().scaledToFill().clipped()
+            } else {
+                LinearGradient(
+                    colors: [.blue.opacity(0.35), .purple.opacity(0.35)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .softRaised(corner: 16, pressed: selected)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    if !unlocked {
+                        HStack(spacing: 6) {
+                            Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+                            Text("\(world.unlockCost)").font(.footnote).bold()
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                    }
+                }
+                .padding(8)
+
+                Spacer()
+
+                Text(world.name)
+                    .font(.headline).bold()
+                    .shadow(radius: 2)
+                    .padding(.bottom, 10)
+            }
+            .foregroundStyle(.white)
+
+            if !unlocked {
+                Color.black.opacity(0.35)
+                Image(systemName: "lock.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(selected ? Color.accentColor : .clear, lineWidth: 3)
         }
-        .buttonStyle(.plain)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .softRaised(corner: 16, pressed: selected)
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+
+        Group {
+            if let onTap {
+                card.onTapGesture(perform: onTap)
+                    .accessibilityAddTraits(.isButton)
+            } else {
+                card // no gesture; lets outer NavigationLink/Button handle taps
+            }
+        }
+        .accessibilityLabel(Text(world.name))
     }
 }
+
+
