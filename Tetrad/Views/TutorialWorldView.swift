@@ -282,6 +282,31 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
 
     @State private var model = MiniSquareGame()
     @State private var didPlaceOnce = false
+    // Drag state shared between bag + ghost
+    @State private var draggingChar: Character? = nil
+    @State private var dragPoint: CGPoint = .zero
+    @State private var tutorialTileSide: CGFloat = 56     // keep bag tiles visually in sync
+    @State private var boardRectInStage: CGRect = .zero
+
+    // Convert a finger point → board coord (or nil if in gap/outside)
+    private func coordAt(_ point: CGPoint, cell: CGFloat, gap: CGFloat, order: Int) -> (r: Int, c: Int)? {
+        let rect = boardRectInStage
+        guard rect.contains(point) else { return nil }
+        let x = point.x - rect.minX
+        let y = point.y - rect.minY
+        let step = cell + gap
+
+        let c = Int(floor(x / step))
+        let r = Int(floor(y / step))
+        guard r >= 0, c >= 0, r < order, c < order else { return nil }
+
+        // Inside the cell (not the gap)?
+        let xInCell = x - CGFloat(c) * step
+        let yInCell = y - CGFloat(r) * step
+        guard xInCell <= cell && yInCell <= cell else { return nil }
+        return (r, c)
+    }
+
 
     // tweak if your real board uses different values
     private let refGap: CGFloat = 8
@@ -319,8 +344,7 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                         Color.clear
                             .frame(width: zoneWidth4, height: zoneHeight3)
                             .overlay(alignment: .center) {
-                                
-                                // 2×2 or 3×3 board, top-centered, using SAME tile size
+                                // 2×2 or 3×3 board, centered, using SAME tile size
                                 MiniBoardView(
                                     model: $model,
                                     order: order,
@@ -336,10 +360,21 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                                     }
                                 }
                                 .id(order)
+                                // keep tutorial visuals aligned to board tile size
+                                .onAppear { tutorialTileSide = refCell }
+                                .onChange(of: geo.size) { _ in tutorialTileSide = refCell }
+                                // measure the board frame in the shared "stage" space (for drop hit-testing)
+                                .background(
+                                    GeometryReader { g in
+                                        Color.clear
+                                            .onAppear  { boardRectInStage = g.frame(in: .named("stage")) }
+                                            .onChange(of: g.size) { _ in
+                                                boardRectInStage = g.frame(in: .named("stage"))
+                                            }
+                                    }
+                                )
                             }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                        //.padding(EdgeInsets(top: 20, leading: 0, bottom: 0, trailing: 0))
-
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 
                         // 🔹 Caller overlay drawn over the board zone
                         overlay
@@ -354,15 +389,61 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                 }
                 .padding(.top, 14)
 
-                // LETTER BAG
+                // LETTER BAG — immediate drag with ghost
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Letter Bag")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    MiniBagView(model: $model)
-                        .padding(.horizontal, horizontalPadding)
-                        //.padding(.bottom, 8)
+                    HStack(spacing: 6) {
+                        ForEach(Array(model.bag.enumerated()), id: \.offset) { _, ch in
+                            Text(String(ch))
+                                .font(.system(size: 20, weight: .heavy))
+                                .frame(width: 42, height: 42)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(.secondarySystemBackground))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary, lineWidth: 1))
+                                )
+                                .contentShape(Rectangle())
+                                // 🚀 Immediate drag (no long-press), in the global "stage" space
+                                .gesture(
+                                    DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
+                                        .onChanged { v in
+                                            if draggingChar == nil { draggingChar = ch }
+                                            dragPoint = v.location
+                                        }
+                                        .onEnded { v in
+                                            let pt   = v.location
+                                            let rect = boardRectInStage
+                                            if rect.contains(pt) {
+                                                let x = pt.x - rect.minX
+                                                let y = pt.y - rect.minY
+                                                let step = tutorialTileSide + refGap
+                                                let c = Int(floor(x / step))
+                                                let r = Int(floor(y / step))
+                                                let xInCell = x - CGFloat(c) * step
+                                                let yInCell = y - CGFloat(r) * step
+                                                if r >= 0, c >= 0, r < order, c < order,
+                                                   xInCell <= tutorialTileSide, yInCell <= tutorialTileSide {
+                                                    let moved = model.place(ch, at: .init(r: r, c: c))
+                                                    if moved && !didPlaceOnce {
+                                                        didPlaceOnce = true
+                                                        onFirstPlacement()
+                                                    }
+                                                    if model.isSolved {
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
+                                                    }
+                                                }
+                                            }
+                                            draggingChar = nil
+                                        }
+                                )
+                        }
+                    }
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, horizontalPadding)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 0))
@@ -386,7 +467,26 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                     }
                 }
             }
+
+            // 🟣 Floating ghost that follows the finger while dragging from the bag
+            if let ch = draggingChar {
+                Text(String(ch))
+                    .font(.system(size: 24, weight: .heavy))
+                    .frame(width: tutorialTileSide, height: tutorialTileSide)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(.secondarySystemBackground))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary, lineWidth: 1))
+                    )
+                    .shadow(radius: 6, x: 0, y: 4)
+                    .position(dragPoint)    // in "stage" space
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
         }
+        // shared coordinate space so bag drag points and board measurement agree
+        .coordinateSpace(name: "stage")
+
         .onAppear {
             model.load(order: order, dictionaryName: dictionaryName)
             NotificationCenter.default.addObserver(forName: .tutorialRevealRequested, object: nil, queue: .main) { _ in
@@ -632,9 +732,16 @@ private struct TileCell: View {
 
 private struct MiniBagView: View {
     @Binding var model: MiniSquareGame
+
+    // NEW: let the bag know how to land tiles on the board
+    let order: Int
+    let cell: CGFloat          // board tile side (use tutorialTileSide from parent)
+    let gap: CGFloat
+    let boardRectInStage: CGRect
+
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(model.bag.enumerated()), id: \.offset) { idx, ch in
+            ForEach(Array(model.bag.enumerated()), id: \.offset) { _, ch in
                 Text(String(ch))
                     .font(.system(size: 20, weight: .heavy))
                     .frame(width: 42, height: 42)
@@ -643,13 +750,48 @@ private struct MiniBagView: View {
                             .fill(Color(.secondarySystemBackground))
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary, lineWidth: 1))
                     )
-                    .onDrag { NSItemProvider(object: String(ch) as NSString) }
+                    .contentShape(Rectangle())
+
+                    // 🚀 Immediate drag (no long press)
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
+                            .onEnded { v in
+                                let pt = v.location
+                                let rect = boardRectInStage
+                                guard rect.contains(pt) else { return }
+
+                                // convert point → (r,c)
+                                let x = pt.x - rect.minX
+                                let y = pt.y - rect.minY
+                                let step = cell + gap
+                                let c = Int(floor(x / step))
+                                let r = Int(floor(y / step))
+                                guard r >= 0, c >= 0, r < order, c < order else { return }
+
+                                // ensure we’re not in the gap
+                                let xInCell = x - CGFloat(c) * step
+                                let yInCell = y - CGFloat(r) * step
+                                guard xInCell <= cell && yInCell <= cell else { return }
+
+                                // place into the board
+                                let moved = model.place(ch, at: .init(r: r, c: c))
+                                if !moved {
+                                    // optional: haptic / feedback if you want
+                                    // UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                }
+                            }
+                    )
+
+                    // (optional) keep your old drags if you want legacy behavior elsewhere
+                    // .draggable(String(ch))
+                    // .onDrag { NSItemProvider(object: String(ch) as NSString) }
             }
         }
         .padding(10)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }
+
 
 // MARK: - Overlays
 
