@@ -20,6 +20,23 @@ struct TutorialWorldView: View {
 
     enum Step { case intro, level1, level1Win, level2, level2Win }
     @State private var step: Step = .intro
+    
+    // TUTORIAL STUFF
+    enum L1Step: Equatable { case placeFirst, explainCost, promptBoost, done }
+
+    // inside struct TutorialWorldView
+    @State private var l1Step: L1Step = .placeFirst
+
+    private var l1StepContent: (index: Int, text: String)? {
+        guard step == .level1 else { return nil }
+        switch l1Step {
+        case .placeFirst:   return (1, "Drag tiles onto the board to make words.")
+        case .explainCost:  return (2, "Any further moves with that tile will cost a MOVE point.")
+        case .promptBoost:  return (3, "Tap the Boosts button to use a Reveal, which will reveal a letter!")
+        case .done:         return nil
+        }
+    }
+
 
     // helper gating in L1
     @State private var l1PlacedOne = false
@@ -77,16 +94,13 @@ struct TutorialWorldView: View {
                 )
             }
         }
-        // ⬇️ Screen-level overlay: bottom-right, just above the Boosts pill
+        // ⬇️ Screen-level overlay: bottom-center, just above the Boosts pill
         .overlay(alignment: .bottomTrailing) {
             Group {
-                // Level 1 – initial two-step helper
-                if step == .level1, !l1PlacedOne {
+                if let stepLine = l1StepContent {
                     CalloutCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            numberedStep(1, "Drag tiles onto the board to make words.")
-                            numberedStep(2, "Any further moves with that tile will cost a MOVE point.")
-                        }
+                        // exactly one numbered line at a time
+                        numberedStep(stepLine.index, stepLine.text)
                     }
                     .frame(maxWidth: 420)
                     .padding(.trailing, 16) // align with Boosts pill trailing inset
@@ -94,21 +108,9 @@ struct TutorialWorldView: View {
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-
-                // Level 1 – Boost tip after first placement
-                if step == .level1, showRevealTip {
-                    CalloutCard {
-                        numberedStep(3, "Tap the Boosts button to reveal a helpful letter.")
-                    }
-                    .frame(maxWidth: 360)
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 76)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-                    .onAppear { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                }
             }
         }
+
         .sheet(isPresented: $showBoostSheet) {
             VStack(spacing: 16) {
                 Text("Boosts").font(.title2).bold()
@@ -255,6 +257,8 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
     let onFirstPlacement: () -> Void
     let onRequestBoosts: () -> Void
     let onWin: () -> Void
+    let fixedRows: [String]? = nil   // ← pass ["AT","TO"] for L1
+
 
     // 🔹 Caller-provided overlay content rendered over the board zone
     let overlay: BoardOverlay
@@ -287,7 +291,31 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
     @State private var dragPoint: CGPoint = .zero
     @State private var tutorialTileSide: CGFloat = 56     // keep bag tiles visually in sync
     @State private var boardRectInStage: CGRect = .zero
+    @State private var bagRectInStage: CGRect = .zero
+    @State private var fixedSolution: [String] = []
 
+    // MARK: - L1 one-step-at-a-time instructions
+    private enum L1Step { case placeFirst, explainCost, promptBoost, done }
+
+    @State private var l1Step: L1Step = .placeFirst
+
+
+
+    /// Call this **after a successful bag→board placement**.
+    private func updateL1StepAfterPlacement() {
+        // Gate to Tutorial L1
+        guard order == 2 && showHelpers else { return }
+
+        let placed = model.board.reduce(0) { $0 + $1.compactMap { $0 }.count }
+
+        if placed >= 2 {
+            l1Step = .promptBoost
+        } else if placed == 1, l1Step == .placeFirst {
+            l1Step = .explainCost
+        }
+    }
+
+    
     // Convert a finger point → board coord (or nil if in gap/outside)
     private func coordAt(_ point: CGPoint, cell: CGFloat, gap: CGFloat, order: Int) -> (r: Int, c: Int)? {
         let rect = boardRectInStage
@@ -314,6 +342,26 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
     private let maxCell: CGFloat = 120
     private let horizontalPadding: CGFloat = 16
 
+    // use fixed rows if provided
+       private func loadFixed(_ rows: [String]) {
+           let n = rows.count
+           fixedSolution = rows.map { $0.uppercased() }
+           model.moves = 0
+           model.locked.removeAll()
+           model.board = Array(repeating: Array(repeating: nil, count: n), count: n)
+           model.bag = Array(rows.joined().uppercased())
+           model.bag.shuffle()
+       }
+
+       private func isSolvedFixed() -> Bool {
+           guard !fixedSolution.isEmpty else { return model.isSolved }
+           for r in 0..<fixedSolution.count {
+               let row = model.board[r].compactMap { $0 }
+               if row.count != fixedSolution.count || String(row) != fixedSolution[r] { return false }
+           }
+           return true
+       }
+    
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -349,16 +397,31 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                                     model: $model,
                                     order: order,
                                     cell: refCell,
-                                    gap: refGap
-                                ) { didMove in
-                                    if didMove && !didPlaceOnce {
-                                        didPlaceOnce = true
-                                        onFirstPlacement()
+                                    gap: refGap,
+                                    onAnyMove: { didMove in
+                                        if didMove && !didPlaceOnce {
+                                            didPlaceOnce = true
+                                            onFirstPlacement()
+                                        }
+                                        if isSolvedFixed() {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
+                                        }
+                                    },
+                                    // 👇 enable board → bag drag-back
+                                    bagRectInStage: bagRectInStage,
+                                    boardRectInStage: boardRectInStage,
+                                    // 👇 ghost wiring (optional)
+                                    onBoardDragBegan: { ch, pt in
+                                        if draggingChar == nil { draggingChar = ch }
+                                        dragPoint = pt
+                                    },
+                                    onBoardDragChanged: { pt in
+                                        dragPoint = pt
+                                    },
+                                    onBoardDragEnded: { _, _ in
+                                        draggingChar = nil
                                     }
-                                    if model.isSolved {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
-                                    }
-                                }
+                                )
                                 .id(order)
                                 // keep tutorial visuals aligned to board tile size
                                 .onAppear { tutorialTileSide = refCell }
@@ -382,6 +445,7 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                             .transition(.opacity)
                             .zIndex(1)
                     }
+
                     .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal, horizontalPadding)
                     // 3) Constrain the whole block to the 3×3 height
@@ -389,7 +453,7 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                 }
                 .padding(.top, 14)
 
-                // LETTER BAG — immediate drag with ghost
+                // LETTER BAG
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Letter Bag")
                         .font(.caption)
@@ -426,27 +490,47 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
                                                 let yInCell = y - CGFloat(r) * step
                                                 if r >= 0, c >= 0, r < order, c < order,
                                                    xInCell <= tutorialTileSide, yInCell <= tutorialTileSide {
+
+                                                    // Bag → board: freeze/restore moves so it doesn't cost a point
+                                                    let prevMoves = model.moves
                                                     let moved = model.place(ch, at: .init(r: r, c: c))
-                                                    if moved && !didPlaceOnce {
-                                                        didPlaceOnce = true
-                                                        onFirstPlacement()
-                                                    }
-                                                    if model.isSolved {
-                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
+                                                    if moved { model.moves = prevMoves }
+
+                                                    if moved {
+                                                        // ⬇️ advance one-line tutorial instruction (1st → 2nd → Boost tip)
+                                                        updateL1StepAfterPlacement()
+
+                                                        if !didPlaceOnce {
+                                                            didPlaceOnce = true
+                                                            onFirstPlacement()
+                                                        }
+                                                        if isSolvedFixed() {
+                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
+                                                        }
                                                     }
                                                 }
                                             }
                                             draggingChar = nil
                                         }
+
                                 )
                         }
                     }
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal, horizontalPadding)
+                    .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
+                    .background(
+                        GeometryReader { g in
+                            Color.clear
+                                .onAppear  { bagRectInStage = g.frame(in: .named("stage")) }
+                                .onChange(of: g.size) { _ in
+                                    bagRectInStage = g.frame(in: .named("stage"))
+                                }
+                        }
+                    )                    .padding(0)
+                    //.padding(.horizontal, horizontalPadding)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 0))
+
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -487,15 +571,49 @@ private struct TutorialLevelScreen<BoardOverlay: View>: View {
         // shared coordinate space so bag drag points and board measurement agree
         .coordinateSpace(name: "stage")
 
+        .onChange(of: l1Step) { _, new in
+            if new == .promptBoost, order == 2, showHelpers {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
+        
+        // outer most
         .onAppear {
-            model.load(order: order, dictionaryName: dictionaryName)
-            NotificationCenter.default.addObserver(forName: .tutorialRevealRequested, object: nil, queue: .main) { _ in
+            // Hard-coded tutorial squares
+            let rows: [String]
+            switch order {
+            case 2: rows = ["AT", "TO"]                 // Level 1 (2×2)
+            case 3: rows = ["APE", "PEN", "END"]        // Level 2 (3×3)
+            default: rows = []
+            }
+            loadFixed(rows)  // seeds model.board + model.bag
+
+            // Initialize the one-line helper flow for Level 1
+            if order == 2 && showHelpers {
+                l1Step = .placeFirst
+            } else {
+                l1Step = .done
+            }
+
+            // Reveal completes the helper flow
+            NotificationCenter.default.addObserver(
+                forName: .tutorialRevealRequested,
+                object: nil, queue: .main
+            ) { _ in
                 model.revealOne()
+                if order == 2 && showHelpers {
+                    l1Step = .done
+                }
             }
         }
         .onDisappear {
-            NotificationCenter.default.removeObserver(self, name: .tutorialRevealRequested, object: nil)
+            NotificationCenter.default.removeObserver(
+                self,
+                name: .tutorialRevealRequested,
+                object: nil
+            )
         }
+
     }
 
     private func clamp(_ v: CGFloat, min lo: CGFloat, max hi: CGFloat) -> CGFloat {
@@ -631,46 +749,126 @@ private struct MiniSquareGame {
 private struct MiniBoardView: View {
     @Binding var model: MiniSquareGame
     let order: Int
-    let cell: CGFloat           // ← exact tile side (matches real board)
-    let gap: CGFloat            // ← same gap as real board
+    let cell: CGFloat           // exact tile side
+    let gap: CGFloat            // same gap as real board
     var onAnyMove: (_ didMove: Bool) -> Void
+
+    // Pass these from the parent (measured in .named("stage"))
+    var bagRectInStage: CGRect? = nil
+    var boardRectInStage: CGRect? = nil
+
+    // (optional) ghost hooks for board drags
+    var onBoardDragBegan: ((Character, CGPoint) -> Void)? = nil
+    var onBoardDragChanged: ((CGPoint) -> Void)? = nil
+    var onBoardDragEnded: ((Character, CGPoint) -> Void)? = nil
 
     var body: some View {
         let boardSize = cell * CGFloat(order) + gap * CGFloat(order - 1)
         let cols = Array(repeating: GridItem(.fixed(cell), spacing: gap), count: order)
 
-        // model ready?
         let ready = model.board.count == order && model.board.allSatisfy { $0.count == order }
 
         LazyVGrid(columns: cols, spacing: gap) {
             ForEach(0..<(order * order), id: \.self) { i in
                 let r = i / order
                 let c = i % order
+                let chOpt = safeChar(r, c)
+                let isLocked = ready && model.locked.contains(.init(r: r, c: c))
 
-                TileCell(
-                    char: safeChar(r, c),
-                    locked: ready && model.locked.contains(.init(r: r, c: c)),
-                    side: cell
-                )
-                .onTapGesture {
-                    guard ready else { return }
-                    if model.board[r][c] != nil {
-                        model.clear(at: .init(r: r, c: c))
-                        onAnyMove(true)
+                TileCell(char: chOpt, locked: isLocked, side: cell)
+                    .contentShape(Rectangle())
+
+                    // tap to clear (no move cost)
+                    .onTapGesture {
+                        guard ready, model.board[r][c] != nil else { return }
+                        model.board[r][c] = nil
+                        onAnyMove(false) // not a scoring move
                     }
+
+                // ✅ typed drop from bag (.draggable(String)) — NO move cost
+                .dropDestination(for: String.self) { items, _ in
+                    guard ready, let s = items.first, let ch = s.first else { return false }
+                    let prevMoves = model.moves
+                    let placed = model.place(ch, at: .init(r: r, c: c))
+                    if placed { model.moves = prevMoves }     // ← neutralize any move increment
+                    onAnyMove(placed)
+                    return placed
                 }
+
+
+                // 🔁 legacy fallback (.onDrag with NSString) — NO move cost
                 .onDrop(of: [.utf8PlainText, .plainText], isTargeted: nil) { providers in
                     guard ready, let item = providers.first else { return false }
                     _ = item.loadObject(ofClass: NSString.self) { reading, _ in
                         guard let ns = reading as? NSString,
                               let ch = (ns as String).first else { return }
                         DispatchQueue.main.async {
-                            let moved = model.place(ch, at: .init(r: r, c: c))
-                            onAnyMove(moved)
+                            let prevMoves = model.moves
+                            let placed = model.place(ch, at: .init(r: r, c: c))
+                            if placed { model.moves = prevMoves }   // ← neutralize any move increment
+                            onAnyMove(placed)
                         }
                     }
                     return true
                 }
+
+                    // 🚀 Immediate drag FROM board tile
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
+                            .onChanged { v in
+                                guard let ch = chOpt, ready, !isLocked else { return }
+                                onBoardDragBegan?(ch, v.location)
+                                onBoardDragChanged?(v.location)
+                            }
+                            .onEnded { v in
+                                guard let ch = chOpt, ready, !isLocked else { return }
+                                onBoardDragEnded?(ch, v.location)
+
+                                // 1) Drop over bag? → return to bag (NO move cost)
+                                if let bagRect = bagRectInStage, bagRect.contains(v.location) {
+                                    model.board[r][c] = nil
+                                    // put the tile back into the bag so counts stay balanced
+                                    model.bag.append(ch)
+                                    onAnyMove(false)
+                                    return
+                                }
+
+                                // 2) Drop over board? → move/swap (COSTS 1 MOVE)
+                                guard let rect = boardRectInStage, rect.contains(v.location) else { return }
+                                let step = cell + gap
+                                let x = v.location.x - rect.minX
+                                let y = v.location.y - rect.minY
+                                let tc = Int(floor(x / step))
+                                let tr = Int(floor(y / step))
+                                guard tr >= 0, tc >= 0, tr < order, tc < order else { return }
+
+                                // inside tile bounds (reject the gap area)
+                                let xInCell = x - CGFloat(tc) * step
+                                let yInCell = y - CGFloat(tr) * step
+                                guard xInCell <= cell, yInCell <= cell else { return }
+
+                                // same cell? ignore
+                                guard tr != r || tc != c else { return }
+
+                                // can't drop onto locked destination
+                                guard !model.locked.contains(.init(r: tr, c: tc)) else { return }
+
+                                // perform move/swap
+                                if let destCh = model.board[tr][tc] {
+                                    // swap
+                                    model.board[tr][tc] = ch
+                                    model.board[r][c]   = destCh
+                                } else {
+                                    // move into empty
+                                    model.board[tr][tc] = ch
+                                    model.board[r][c]   = nil
+                                }
+
+                                // ✅ board→board costs a move
+                                model.moves += 1
+                                onAnyMove(true)
+                            }
+                    )
             }
         }
         .frame(width: boardSize, height: boardSize, alignment: .top)
@@ -683,6 +881,9 @@ private struct MiniBoardView: View {
         return model.board[r][c]
     }
 }
+
+
+
 
 private struct TileCell: View {
     let char: Character?
