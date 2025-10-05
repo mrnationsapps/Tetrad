@@ -94,7 +94,7 @@ struct TutorialWorldView: View {
                 )
             }
         }
-        // ⬇️ Screen-level overlay: bottom-center, just above the Boosts pill
+        // ⬇️ Instruction Callout Text
         .overlay(alignment: .bottomTrailing) {
             Group {
                 if let stepLine = l1StepContent {
@@ -104,7 +104,7 @@ struct TutorialWorldView: View {
                     }
                     .frame(maxWidth: 420)
                     .padding(.trailing, 16) // align with Boosts pill trailing inset
-                    .padding(.bottom, 76)   // sit just above the Boosts pill
+                    .padding(.bottom, 120)   // sit just above the Boosts pill
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -170,7 +170,7 @@ private func numberedStep(_ n: Int, _ text: String) -> some View {
             .font(.title3)
             .foregroundStyle(.tint)                 // <- or Color.accentColor
         Text(text)
-            .font(.subheadline)
+            .font(.headline)
             .foregroundStyle(.primary)
             .fixedSize(horizontal: false, vertical: true)
     }
