@@ -18,8 +18,13 @@ struct LevelPlayView: View {
     @State private var bannerWasShown = false
     @State private var pendingWinDelay = false
     @State private var bannerSize: CGSize = .zero
+    
+    @State private var walletOpen = false
+    @State private var boostsOpen = false
 
-    // MARK: - Body
+
+
+    // MARK: - Main Body
     var body: some View {
         ZStack {
             boardLayer
@@ -28,6 +33,7 @@ struct LevelPlayView: View {
         // 1) particle aura
         .overlay(auraOverlay, alignment: .center)
 
+        // 2) your existing animations / toolbar / lifecycle
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
         .navigationBarBackButtonHidden(true)
         .toolbar { levelToolbar }
@@ -58,10 +64,58 @@ struct LevelPlayView: View {
             }
         }
 
-        // 3) win overlay
+        // 3) win overlay (stays)
         .overlay(winOverlay)
+
+        // 4) BOOSTS slide-up panel (shim for now)
+        .overlay(alignment: .bottom, content: {
+            if boostsOpen {
+                BoostsSlideUpShim(onClose: { boostsOpen = false })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(50) // above footer
+            }
+        })
+
+
+        // 5) FOOTER — drives walletOpen/boostsOpen
+        .safeAreaInset(edge: .bottom) {
+            Footer(
+                coins: nil,                   // <-- no coins in this scope yet
+                boostsAvailable: nil,         // <-- no boosts count in this scope yet
+                isWalletActive: $walletOpen,
+                isBoostsActive: $boostsOpen,
+                isInteractable: !showWin && !showWorldBanner,
+                onTapWallet: { walletOpen.toggle() },
+                onTapBoosts: { boostsOpen.toggle() }
+            )
+            .zIndex(10)
+        }
+
     }
 
+
+    private struct BoostsSlideUpShim: View {
+        var onClose: () -> Void
+        var body: some View {
+            VStack(spacing: 12) {
+                Capsule().frame(width: 44, height: 5).opacity(0.25).padding(.top, 8)
+                Text("Boosts").font(.headline)
+                Text("Temporary panel shim — replace with your real Boosts panel.")
+                    .font(.footnote).multilineTextAlignment(.center).opacity(0.7)
+                Button("Close", action: onClose).padding(.top, 4)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 320)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(radius: 20, y: 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+    }
+
+    
     // MARK: - Layers (kept small to help the type-checker)
 
     @ViewBuilder private var boardLayer: some View {
