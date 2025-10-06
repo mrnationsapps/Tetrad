@@ -102,23 +102,6 @@ public struct Footer: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .background(
-            Rectangle()
-                .fill(barBackground)
-                .ignoresSafeArea(edges: .bottom)
-                .overlay(
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.black.opacity(0.10), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(height: 1)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                )
-        )
         .allowsHitTesting(isInteractable)
         .opacity(isInteractable ? 1 : 0.6)
     }

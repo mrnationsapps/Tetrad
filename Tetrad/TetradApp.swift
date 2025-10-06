@@ -4,7 +4,7 @@ import SwiftUI
 struct TetradApp: App {
     @StateObject private var game   = GameState()
     @StateObject private var boosts = BoostsService()
-    @StateObject private var levels = LevelsService()   // ⬅️ add this
+    @StateObject private var levels = LevelsService()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -13,10 +13,10 @@ struct TetradApp: App {
             RootView()
                 .environmentObject(game)
                 .environmentObject(boosts)
-                .environmentObject(levels)              // ⬅️ inject into environment
+                .environmentObject(levels)
                 .onAppear {
                     boosts.resetIfNeeded()
-                    levels.loadProgressIfNeeded()       // ⬅️ load per-world progress once
+                    levels.loadProgressIfNeeded()
                 }
         }
         .onChange(of: scenePhase) { phase in

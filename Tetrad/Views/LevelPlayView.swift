@@ -5,6 +5,7 @@ struct LevelPlayView: View {
     @EnvironmentObject var game: GameState
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
+    @EnvironmentObject var boosts: BoostsService
 
     let world: World
 
@@ -18,10 +19,8 @@ struct LevelPlayView: View {
     @State private var bannerWasShown = false
     @State private var pendingWinDelay = false
     @State private var bannerSize: CGSize = .zero
-    
-    @State private var walletOpen = false
-    @State private var boostsOpen = false
-
+    @State private var boostTest: Int = 0   // TEMP: remove when wired to real boosts store
+    @State private var showInsufficientCoins = false
 
 
     // MARK: - Main Body
@@ -67,51 +66,142 @@ struct LevelPlayView: View {
         // 3) win overlay (stays)
         .overlay(winOverlay)
 
-        // 4) BOOSTS slide-up panel (shim for now)
-        .overlay(alignment: .bottom, content: {
-            if boostsOpen {
-                BoostsSlideUpShim(onClose: { boostsOpen = false })
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(50) // above footer
+        .withFooterPanels(
+            coins: nil,
+            boostsAvailable: nil,
+            isInteractable: !showWin && !showWorldBanner,
+            boostsPanel: { dismiss in
+                VStack(alignment: .leading, spacing: 8) {
+                    // Header
+                    HStack(alignment: .top) {
+                        Label("Boosts", systemImage: "bolt.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("\(boosts.remaining) left")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Tiles row
+                    HStack(alignment: .top, spacing: 12) {
+                        // BOOST: REVEAL
+                        Button {
+                            // Try to place first…
+                            let success = game.applySmartBoost(movePenalty: 10)
+                            if success {
+                                // …only then consume from your real store
+                                _ = boosts.useOne()
+                                dismiss() // close panel on success
+                            }
+                        } label: {
+                            boostTile(icon: "wand.and.stars", title: "Reveal", material: .thinMaterial)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canUseBoost)
+                        .alignmentGuide(.top) { d in d[.top] }
+
+                        // Placeholders (same top guide)
+                        boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
+                            .opacity(0.35)
+                            .alignmentGuide(.top) { d in d[.top] }
+
+                        boostTile(icon: "eye", title: "Clarity", material: .thinMaterial)
+                            .opacity(0.35)
+                            .alignmentGuide(.top) { d in d[.top] }
+                            .padding(.top, 10)
+                    }
+                }
+            },
+            walletPanel: { dismiss in
+                VStack(alignment: .leading, spacing: 16) {
+
+                    // Buy Boosts
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Spend coins on boosts")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 10) {
+                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  {
+                                buyRevealBoost(cost: 5, count: 1)
+                            }
+                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) {
+                                buyRevealBoost(cost: 12, count: 3)
+                            }
+                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) {
+                                buyRevealBoost(cost: 35, count: 10)
+                            }
+                        }
+                    }
+
+                    // Get Coins (IAP stubs)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Buy Coins")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 10) {
+                            WalletIAPPill(amount: 100,  price: "$0.99") { simulateIAPPurchase(coins: 100) }
+                            WalletIAPPill(amount: 300,  price: "$2.99") { simulateIAPPurchase(coins: 300) }
+                            WalletIAPPill(amount: 1200, price: "$7.99") { simulateIAPPurchase(coins: 1200) }
+                        }
+                    }
+                }
             }
-        })
 
-
-        // 5) FOOTER — drives walletOpen/boostsOpen
-        .safeAreaInset(edge: .bottom) {
-            Footer(
-                coins: nil,                   // <-- no coins in this scope yet
-                boostsAvailable: nil,         // <-- no boosts count in this scope yet
-                isWalletActive: $walletOpen,
-                isBoostsActive: $boostsOpen,
-                isInteractable: !showWin && !showWorldBanner,
-                onTapWallet: { walletOpen.toggle() },
-                onTapBoosts: { boostsOpen.toggle() }
-            )
-            .zIndex(10)
+        )
+        
+        .alert("Not enough coins", isPresented: $showInsufficientCoins) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("You don't have enough coins for that purchase.")
         }
 
+
+    }
+    
+    private var effectiveBoostsRemaining: Int {
+        // Use your real counter — pick the one that compiles:
+        // return game.availableBoostsCount
+        // return game.boostsRemaining
+        return boosts.remaining
     }
 
+    // Gate for the Reveal button
+    private var canUseBoost: Bool {
+        effectiveBoostsRemaining > 0 && !showWin && !showWorldBanner
+    }
 
-    private struct BoostsSlideUpShim: View {
-        var onClose: () -> Void
-        var body: some View {
-            VStack(spacing: 12) {
-                Capsule().frame(width: 44, height: 5).opacity(0.25).padding(.top, 8)
-                Text("Boosts").font(.headline)
-                Text("Temporary panel shim — replace with your real Boosts panel.")
-                    .font(.footnote).multilineTextAlignment(.center).opacity(0.7)
-                Button("Close", action: onClose).padding(.top, 4)
-                Spacer(minLength: 0)
+    // Call when a boost is successfully consumed
+    private func onBoostConsumed() {
+        if boostTest > 0 {
+            boostTest -= 1
+        } else {
+            // If you have a real store, uncomment ONE of these:
+            // _ = boosts.useOne()
+            // _ = game.boosts.useOne()
+        }
+    }
+
+    // Tile UI used in the panel
+    @ViewBuilder
+    private func boostTile(icon: String, title: String, material: Material) -> some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(material)
+                    .frame(width: 88, height: 88)
+
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.primary)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 320)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(radius: 20, y: 8)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.primary)
         }
     }
 
@@ -261,6 +351,22 @@ struct LevelPlayView: View {
 
     // MARK: - Helpers
 
+    private func buyRevealBoost(cost: Int, count: Int = 1) {
+        if levels.coins >= cost {
+            levels.addCoins(-cost)
+            boosts.grant(count: count)
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
+        } else {
+            showInsufficientCoins = true
+        }
+    }
+
+    private func simulateIAPPurchase(coins: Int) {
+        levels.addCoins(coins)
+    }
+    
     private func worldIndexK() -> Int? {
         let rows = game.worldProtectedCoords.map(\.row)
         guard !rows.isEmpty else { return nil }

@@ -13,6 +13,9 @@ import UniformTypeIdentifiers
 struct TutorialWorldView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
+    // If you want Wallet to function here later (coins purchases), you can also:
+    // @EnvironmentObject private var boosts: BoostsService
+    // @EnvironmentObject private var game: GameState
 
     let world: World   // pass the Tutorial world
 
@@ -32,11 +35,12 @@ struct TutorialWorldView: View {
         }
     }
 
-
-    // helper gating in L1
     @State private var l1PlacedOne = false
-    @State private var showBoostSheet = false
+    // Old sheet path removed in favor of footer panels:
+    // @State private var showBoostSheet = false
     @State private var showRevealTip = false
+    @State private var tutorialAllowsBoosts = false   // flips true when we reach Step 3 (“Tap Boosts…”)
+    @State private var showInsufficientCoins = false  // if you later enable wallet purchases here
 
     var body: some View {
         ZStack {
@@ -54,7 +58,8 @@ struct TutorialWorldView: View {
                     l1Step: $l1Step,
                     // 1st tile placed → advance to step 2
                     onFirstPlacement: { l1Step = .explainCost },
-                    onRequestBoosts: { showBoostSheet = true },
+                    // (Old) onRequestBoosts used to show a sheet; keep as a no-op now.
+                    onRequestBoosts: { /* handled via footer Boosts panel */ },
                     onWin: {
                         levels.addCoins(3)
                         step = .level1Win
@@ -111,30 +116,14 @@ struct TutorialWorldView: View {
             }
         }
 
-        .sheet(isPresented: $showBoostSheet) {
-            VStack(spacing: 16) {
-                Text("Boosts").font(.title2).bold()
-                Text("Tap “Reveal” to reveal a hidden letter.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    NotificationCenter.default.post(name: .tutorialRevealRequested, object: nil)
-                    showBoostSheet = false
-                    showRevealTip = false
-                } label: {
-                    Label("Reveal", systemImage: "sparkles")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(SoftRaisedPillStyle(height: 48))
-
-                Button("Close") { showBoostSheet = false }
-                    .padding(.top, 8)
+        // 🔔 Flip the Boosts gate ON when Level 1 reaches the “Tap Boosts…” step
+        .onChange(of: l1Step) { _, newStep in
+            if step == .level1 {
+                tutorialAllowsBoosts = (newStep == .promptBoost)
             }
-            .padding(20)
-            .presentationDetents([.height(260)])
         }
+
+        // 🧭 Top toolbar (unchanged)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { dismiss() } label: {
@@ -158,10 +147,83 @@ struct TutorialWorldView: View {
                 .softRaisedCapsule()
             }
         }
+
+        // 👇 Footer + Panels for Tutorial (Boosts gated to Step 3; Wallet read-only)
+        .withFooterPanels(
+            coins: nil,                  // you can pipe levels.coins if you want a badge on Wallet
+            boostsAvailable: nil,        // tutorial uses a gate instead of a count
+            // Gate footer taps: only interactive during Level 1 @ Step 3
+            isInteractable: (step == .level1 && tutorialAllowsBoosts),
+            boostsPanel: { dismiss in
+                // ---- Tutorial Boosts panel (calls your existing tutorial reveal flow) ----
+                VStack(alignment: .leading, spacing: 8) {
+                    // Header
+                    HStack(alignment: .top) {
+                        Label("Boosts", systemImage: "bolt.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(tutorialAllowsBoosts ? "Ready" : "Follow the steps first")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Tiles row
+                    HStack(alignment: .top, spacing: 12) {
+                        // 👉 REVEAL (triggers your tutorial reveal and closes)
+                        Button {
+                            NotificationCenter.default.post(name: .tutorialRevealRequested, object: nil)
+                            #if os(iOS)
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            #endif
+                            dismiss()
+                        } label: {
+                            boostTile(icon: "wand.and.stars", title: "Reveal", material: .thinMaterial)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!tutorialAllowsBoosts)
+                        .opacity(tutorialAllowsBoosts ? 1.0 : 0.4)
+                        .alignmentGuide(.top) { d in d[.top] }
+
+                        // Placeholders (visual consistency with the main app)
+                        boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
+                            .opacity(0.35)
+                            .alignmentGuide(.top) { d in d[.top] }
+
+                        boostTile(icon: "eye", title: "Clarity", material: .thinMaterial)
+                            .opacity(0.35)
+                            .alignmentGuide(.top) { d in d[.top] }
+                            .padding(.top, 10)
+                    }
+                }
+            },
+            walletPanel: { dismiss in
+                // ---- Tutorial Wallet panel (read-only note) ----
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("Wallet", systemImage: "creditcard")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Close") { dismiss() }.buttonStyle(.bordered)
+                    }
+                    Text("You’ll start earning and spending coins after the tutorial.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        )
+
+        // If you add purchases in tutorial later:
+        .alert("Not enough coins", isPresented: $showInsufficientCoins) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("You don't have enough coins for that purchase.")
+        }
     }
-
-
 }
+
+// MARK: - Small helpers
 
 @ViewBuilder
 private func numberedStep(_ n: Int, _ text: String) -> some View {
@@ -186,7 +248,6 @@ private struct CalloutCard<Content: View>: View {
             .shadow(radius: 6, x: 0, y: 2)
     }
 }
-
 
 private struct IntroLesson: View {
     var onContinue: () -> Void
@@ -275,3 +336,21 @@ private struct WinSheet: View {
     }
 }
 
+// MARK: - Shared tiny tile used in the panels
+
+@ViewBuilder
+private func boostTile(icon: String, title: String, material: Material) -> some View {
+    VStack(spacing: 8) {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(material)
+                .frame(width: 88, height: 88)
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.primary)
+        }
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.primary)
+    }
+}

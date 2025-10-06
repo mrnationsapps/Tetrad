@@ -48,25 +48,27 @@ final class BoostsService: ObservableObject {
     /// Spend one boost if available. Prefers daily, then purchased.
     @discardableResult
     func useOne() -> Bool {
-        if remaining > 0 {
+        guard remaining > 0 else { return false }
+        // Update the published bucket
+        if Thread.isMainThread {
             remaining -= 1
-            persist()
-            return true
-        } else if purchased > 0 {
-            purchased -= 1
-            persist()
-            return true
         } else {
-            return false
+            DispatchQueue.main.async { self.remaining -= 1 }
         }
+        persist()
+        return true
     }
 
-    /// Grant purchased boosts (e.g., wallet buys). Persists.
     func grant(count: Int) {
         guard count > 0 else { return }
-        purchased += count
+        if Thread.isMainThread {
+            remaining += count
+        } else {
+            DispatchQueue.main.async { self.remaining += count }
+        }
         persist()
     }
+
 
     /// Call on app launch and when app becomes active.
     /// If the stored day != today (UTC), resets the daily bucket to the allowance.

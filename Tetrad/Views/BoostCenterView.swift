@@ -83,7 +83,7 @@ struct BoostCenterView: View {
 
     private func useSmartBoost() {
         guard boosts.useOne() else {
-            self.errorText = "No Boosts left today."
+            self.errorText = "No Boosts left."
             return
         }
         let success = game.applySmartBoost(movePenalty: 10)

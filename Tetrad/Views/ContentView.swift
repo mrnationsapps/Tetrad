@@ -51,8 +51,7 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 header
                 boardView
-                underBoardRegion          // (replaces previous tileArea/footer)
-                underBoardControls        // Boosts button moved here
+                underBoardRegion
             }
             .padding()
 
@@ -170,18 +169,18 @@ struct ContentView: View {
                             }
                         )
 
-                    // Boosts panel
-                    compactBoostsPanel
-                        .frame(width: W)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear  { boostsHeight = geo.size.height }
-                                    .onChange(of: geo.size) { _, newSize in
-                                        boostsHeight = newSize.height
-                                    }
-                            }
-                        )
+//                    // Boosts panel
+//                    compactBoostsPanel
+//                        .frame(width: W)
+//                        .background(
+//                            GeometryReader { geo in
+//                                Color.clear
+//                                    .onAppear  { boostsHeight = geo.size.height }
+//                                    .onChange(of: geo.size) { _, newSize in
+//                                        boostsHeight = newSize.height
+//                                    }
+//                            }
+//                        )
                 }
                 .offset(x: showBoostsPanel ? -W : 0)                 // 👈 horizontal slide
                 .animation(.easeInOut(duration: 0.25), value: showBoostsPanel)
@@ -202,39 +201,28 @@ struct ContentView: View {
     }
 
     // MARK: - Under-board controls
-    private var underBoardControls: some View {
-        HStack {
-            Spacer()
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showBoostsPanel.toggle()
-                }
-                // When the boosts panel is showing, disable bag hit-tests
-                if showBoostsPanel { bagRect = .zero }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: showBoostsPanel ? "chevron.right" : "chevron.left")
-                        .imageScale(.medium)
-                    Text(showBoostsPanel ? "Letters" : "Boosts")
-                }
-                .foregroundStyle(.primary) // good contrast on soft surface
-            }
-            .buttonStyle(SoftRaisedPillStyle(height: 52))
-        }
+//    private var underBoardControls: some View {
+//        HStack {
+//            Spacer()
+//            Button {
+//                withAnimation(.easeInOut(duration: 0.25)) {
+//                    showBoostsPanel.toggle()
+//                }
+//                // When the boosts panel is showing, disable bag hit-tests
+//                if showBoostsPanel { bagRect = .zero }
+//            } label: {
+//                HStack(spacing: 8) {
+//                    Image(systemName: showBoostsPanel ? "chevron.right" : "chevron.left")
+//                        .imageScale(.medium)
+//                    Text(showBoostsPanel ? "Letters" : "Boosts")
+//                }
+//                .foregroundStyle(.primary) // good contrast on soft surface
+//            }
+//            .buttonStyle(SoftRaisedPillStyle(height: 52))
+//        }
+//
+//    }
 
-    }
-
-
-    // MARK: - Tile Area (Bag or Compact Boosts Panel)
-
-    @ViewBuilder
-    private var tileArea: some View {
-        if showBoostsPanel {
-            compactBoostsPanel
-        } else {
-            tileBag
-        }
-    }
 
     // Reusable tile view (top-aligned content inside a fixed 72×72)
     @ViewBuilder
@@ -248,52 +236,6 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .alignmentGuide(.top) { d in d[.top] }           // 👈 report our own top
     }
-
-    private var compactBoostsPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header
-            HStack(alignment: .top) {
-                Label("Boosts", systemImage: "bolt.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text("\(effectiveBoostsRemaining) left today")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Tiles row
-            HStack(alignment: .top, spacing: 12) {
-                // BOOST: REVEAL (Button)
-                Button {
-                    let success = game.applySmartBoost(movePenalty: 10)
-                    if success {
-                        if boostTest > 0 { boostTest -= 1 } else { _ = boosts.useOne() }
-                    }
-                } label: {
-                    boostTile(icon: "wand.and.stars", title: "Reveal", material: .ultraThinMaterial)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canUseBoost)
-                .alignmentGuide(.top) { d in d[.top] }
-
-                // Placeholders (same top guide)
-                boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
-                    .opacity(0.35)
-                    .alignmentGuide(.top) { d in d[.top] }
-
-                boostTile(icon: "eye", title: "Clarity", material: .thinMaterial)
-                    .opacity(0.35)
-                    .alignmentGuide(.top) { d in d[.top] }
-                    .padding(.top, 10)
-            }
-        }
-        // 👇 Pin the whole panel to the top of its slot (not just the header)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
 
     // MARK: - Board (responsive, instant drag)
 
