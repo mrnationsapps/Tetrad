@@ -2,10 +2,23 @@ import SwiftUI
 
 // MARK: - Footer
 
+// FILE LEVEL STUFFS
+// Add at file scope
+public enum FooterDisabledStyle {
+    case standard     // existing look
+    case ghosted      // extra-dim for tutorial
+
+    var opacity: Double { self == .standard ? 0.6  : 0.24 }
+    var grayscale: Double { self == .standard ? 0.0 : 0.9 }
+    var saturation: Double { self == .standard ? 1.0 : 0.55 }
+}
+
+
 public struct Footer: View {
     // Read-only display inputs (optional badges)
     public var coins: Int? = nil
     public var boostsAvailable: Int? = nil
+    public var disabledStyle: FooterDisabledStyle = .standard   // ← new
 
     // Visual "selected" states (parent controls these)
     @Binding public var isWalletActive: Bool
@@ -30,6 +43,7 @@ public struct Footer: View {
         isWalletActive: Binding<Bool>,
         isBoostsActive: Binding<Bool>,
         isInteractable: Bool = true,
+        disabledStyle: FooterDisabledStyle = .standard,
         onTapWallet: @escaping () -> Void,
         onTapBoosts: @escaping () -> Void,
         barBackground: AnyShapeStyle = AnyShapeStyle(.ultraThinMaterial),
@@ -42,6 +56,7 @@ public struct Footer: View {
         self._isWalletActive = isWalletActive
         self._isBoostsActive = isBoostsActive
         self.isInteractable = isInteractable
+        self.disabledStyle = disabledStyle              
         self.onTapWallet = onTapWallet
         self.onTapBoosts = onTapBoosts
         self.barBackground = barBackground
@@ -104,6 +119,10 @@ public struct Footer: View {
         .padding(.vertical, verticalPadding)
         .allowsHitTesting(isInteractable)
         .opacity(isInteractable ? 1 : 0.6)
+        // ↓ stronger ghosting when disabledStyle == .ghosted
+        .opacity(isInteractable ? 1 : disabledStyle.opacity)
+        .grayscale(isInteractable ? 0 : disabledStyle.grayscale)
+        .saturation(isInteractable ? 1 : disabledStyle.saturation)
     }
 
 }

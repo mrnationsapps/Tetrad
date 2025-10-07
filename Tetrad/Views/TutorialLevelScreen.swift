@@ -108,6 +108,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 		let up = rows.map { $0.uppercased() }
 
 		fixedSolution = up
+		model.order   = n            // 👈 make the engine 2×2 or 3×3 to match
 		model.solution = up                          // ← IMPORTANT so revealOne() knows what to place
 		model.moves = 0
 		model.locked.removeAll()
@@ -228,18 +229,23 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 						.font(.caption)
 						.foregroundStyle(.secondary)
 
-					HStack(spacing: 6) {
+					// --- Wrapping grid (replaces HStack) ---
+					let tileSide: CGFloat = 42
+					let tileSpacing: CGFloat = 6
+					let cols = [GridItem(.adaptive(minimum: tileSide, maximum: tileSide), spacing: tileSpacing)]
+
+					LazyVGrid(columns: cols, alignment: .leading, spacing: tileSpacing) {
 						ForEach(Array(model.bag.enumerated()), id: \.offset) { _, ch in
 							Text(String(ch))
 								.font(.system(size: 20, weight: .heavy))
-								.frame(width: 42, height: 42)
+								.frame(width: tileSide, height: tileSide)
 								.background(
 									RoundedRectangle(cornerRadius: 8)
 										.fill(Color(.secondarySystemBackground))
 										.overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary, lineWidth: 1))
 								)
 								.contentShape(Rectangle())
-								// 🚀 Immediate drag (no long-press), in the global "stage" space
+								// 🚀 Immediate drag (no long-press), same as before
 								.gesture(
 									DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
 										.onChanged { v in
@@ -260,14 +266,13 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 												if r >= 0, c >= 0, r < order, c < order,
 												   xInCell <= tutorialTileSide, yInCell <= tutorialTileSide {
 
-													// Bag → board: freeze/restore moves so it doesn't cost a point
+													// Bag → board: neutralize move cost
 													let prevMoves = model.moves
 													let moved = model.place(ch, at: .init(r: r, c: c))
 													if moved { model.moves = prevMoves }
 
 													if moved {
 														updateL1StepAfterPlacement()
-
 														if !didPlaceOnce {
 															didPlaceOnce = true
 															onFirstPlacement()
@@ -283,7 +288,8 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 								)
 						}
 					}
-					.frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
+					.frame(maxWidth: .infinity, alignment: .topLeading)
+					// Keep measuring the whole bag area for board→bag drop logic
 					.background(
 						GeometryReader { g in
 							Color.clear
@@ -293,30 +299,12 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 								}
 						}
 					)
-					.padding(0)
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 				.padding(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 0))
+
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-			// Floating Boosts pill bottom-trailing (used by old flow; still fine to show)
-			if showHelpers {
-				VStack {
-					Spacer()
-					HStack {
-						Spacer()
-						Button(action: onRequestBoosts) {
-							Label("Boosts", systemImage: "sparkles")
-								.font(.headline)
-								.padding(.horizontal, 14)
-						}
-						.buttonStyle(SoftRaisedPillStyle(height: 44))
-						.padding(.trailing, 16)
-						.padding(.bottom, 16)
-					}
-				}
-			}
 
 			// 🟣 Floating ghost that follows the finger while dragging from the bag
 			if let ch = draggingChar {
@@ -352,7 +340,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 			case 3: rows = ["APE", "PEN", "END"]        // Level 2 (3×3)
 			default: rows = []
 			}
-
+			model.order = rows.count   // 👈 extra safety (matches L2=3)
 			loadFixed(rows)          // seeds board + bag + solution
 
 			// Initialize the one-line helper flow for Level 1
@@ -389,6 +377,12 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 
 	private struct MiniSquareGame {
 		struct Cell: Hashable { var r: Int; var c: Int }
+		
+		private enum Source {
+			case bag
+			case board(Cell)   // move from this cell
+		}
+		
 		var order: Int = 2
 		var solution: [String] = []
 		var board: [[Character?]] = []
@@ -407,7 +401,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 			}
 			return true
 		}
-
+		
 		mutating func load(order: Int, dictionaryName: String) {
 			self.order = order
 			// Try bundle text (one word square per line, e.g., "APE,PEA,EAR")
@@ -456,61 +450,74 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 		}
 
 		mutating func revealOne() {
-			// 1) Find a safe empty target cell (within both board & solution bounds)
-			var candidates: [Cell] = []
-			let maxRows = min(order, board.count, solution.count)
-			for r in 0..<maxRows {
-				let rowChars = Array(solution[r])
-				let maxCols = min(order, board[r].count, rowChars.count)
-				for c in 0..<maxCols where board[r][c] == nil {
-					candidates.append(Cell(r: r, c: c))
-				}
-			}
-			guard let target = candidates.randomElement() else { return }
+			// Bounds sanity
+			let n = min(order, board.count, solution.count)
+			guard n > 0 else { return }
 
-			// 2) The correct letter for target
-			let want = Array(solution[target.r])[target.c]
-
-			// 3) Try to source the letter from the bag first
-			var sourcedFromBag = false
-			if let idx = bag.firstIndex(of: want) {
-				bag.remove(at: idx)
-				sourcedFromBag = true
-			}
-
-			// 4) If not in the bag, MOVE a wrongly placed copy from the board
-			if !sourcedFromBag {
-				var movedFrom: Cell? = nil
-
-				outer: for r in 0..<board.count {
+			// Helper: find a viable source for `want` (bag preferred, else an UNLOCKED, MISPLACED board copy)
+			func sourceFor(_ want: Character, avoiding target: Cell) -> Source? {
+				if let _ = bag.firstIndex(of: want) { return .bag }
+				for r in 0..<board.count {
 					for c in 0..<board[r].count {
 						guard let ch = board[r][c], ch == want else { continue }
-						// Don't move if it's already correct here or locked
-						let correctHere: Character? = {
-							guard r < solution.count else { return nil }
+						let cell = Cell(r: r, c: c)
+						if locked.contains(cell) { continue }                   // can’t move locked
+						// already correct where it sits?
+						if r < solution.count {
 							let rowChars = Array(solution[r])
-							return (c < rowChars.count) ? rowChars[c] : nil
-						}()
-						let isCorrectHere = (correctHere == ch)
-						let isLockedHere = locked.contains(Cell(r: r, c: c))
-						if !isCorrectHere && !isLockedHere && !(r == target.r && c == target.c) {
-							movedFrom = Cell(r: r, c: c)
-							break outer
+							if c < rowChars.count, rowChars[c] == ch { continue }
+						}
+						if cell == target { continue }                          // trivial
+						return .board(cell)
+					}
+				}
+				return nil
+			}
+
+			// Build only *viable* placements: (target, source)
+			var emptyPlacements: [(Cell, Source)] = []
+			var wrongPlacements: [(Cell, Source)] = []
+
+			for r in 0..<n {
+				let rowChars = Array(solution[r])
+				let cols = min(n, board[r].count, rowChars.count)
+				for c in 0..<cols {
+					let cell = Cell(r: r, c: c)
+					let want = rowChars[c]
+					if board[r][c] == nil {
+						if let src = sourceFor(want, avoiding: cell) {
+							emptyPlacements.append((cell, src))
+						}
+					} else if board[r][c]! != want && !locked.contains(cell) {
+						if let src = sourceFor(want, avoiding: cell) {
+							wrongPlacements.append((cell, src))
 						}
 					}
 				}
-
-				// If we found a misplaced copy, vacate it. Otherwise, bail gracefully.
-				guard let src = movedFrom else {
-					#if DEBUG
-					print("revealOne(): needed '\(want)' but not in bag and no movable misplaced copy found.")
-					#endif
-					return
-				}
-				board[src.r][src.c] = nil
 			}
 
-			// 5) Place at target, lock, and apply small move penalty
+			guard let (target, source) = emptyPlacements.randomElement() ?? wrongPlacements.randomElement() else {
+				#if DEBUG
+				print("revealOne(): no viable targets with available source")
+				#endif
+				return
+			}
+
+			// Apply the move without duplicating tiles
+			let want = Array(solution[target.r])[target.c]
+
+			switch source {
+			case .bag:
+				if let idx = bag.firstIndex(of: want) { bag.remove(at: idx) }   // consume 1 from bag
+			case .board(let src):
+				board[src.r][src.c] = nil                                       // vacate misplaced copy
+			}
+
+			// If target had a wrong letter, return it to the bag
+			if let displaced = board[target.r][target.c], displaced != want {
+				bag.append(displaced)
+			}
+
 			board[target.r][target.c] = want
 			locked.insert(target)
 			moves += 1
@@ -522,7 +529,6 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 
 
 		// MARK: loading helpers
-
 		private func loadSquaresFromBundle(named: String) -> [[String]]? {
 			guard let url = Bundle.main.url(forResource: named, withExtension: "txt"),
 				  let text = try? String(contentsOf: url) else { return nil }
@@ -688,7 +694,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 			let tileFill: AnyShapeStyle = locked
 			? AnyShapeStyle(
 				LinearGradient(
-					colors: [.purple.opacity(0.95), .purple],
+					colors: [.green.opacity(0.95), .green],
 					startPoint: .topLeading,
 					endPoint: .bottomTrailing
 				)

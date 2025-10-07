@@ -26,11 +26,6 @@ struct LevelsView: View {
     @GestureState private var walletDrag: CGFloat = 0    // live drag delta (+down, −up)
     @State private var coinPulse: Bool = false
 
-
-    // Peek height
-    private let walletPeekHeight: CGFloat = 64
-    private var walletPeek: CGFloat { walletPeekHeight }
-
     var body: some View {
         let backdropVisible = walletExpansion > 0.01
 
@@ -41,21 +36,11 @@ struct LevelsView: View {
                 header
                 worldList
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.bottom, walletPeekHeight - 40)  // nudge vertical
+                    .padding(.bottom)  // nudge vertical
                 Spacer(minLength: 8)
             }
             .padding(.horizontal)
-
-            // backdrop (tap to close)
-            if backdropVisible {
-                Color.black.opacity(0.25 * walletExpansion)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                    .onTapGesture { setWallet(false) }
-            }
         }
-        // render the wallet on top, anchored to bottom (no 0-height tricks)
-        .overlay(alignment: .bottom) { walletSheet }
 
         return main
             .navigationBarBackButtonHidden(true)
@@ -79,7 +64,6 @@ struct LevelsView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        setWallet(!walletExpanded)
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "dollarsign.circle").imageScale(.large)
@@ -124,12 +108,19 @@ struct LevelsView: View {
                 }
             }
             // start collapsed (no jump)
-            .onAppear { setWallet(false, animated: false) }
             .onChange(of: levels.coins) { _, _ in
                 coinPulse = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { coinPulse = false }
             }
 
+            .withFooterPanels(
+                coins: levels.coins,
+                boostsAvailable: boosts.remaining,
+                isInteractable: true,                 // footer is always active on Worlds
+                disabledStyle: .standard,
+                boostsPanel: { _ in WorldsBoostsPanel() },     // read-only note on this screen
+                walletPanel: { dismiss in WorldsWalletPanel(dismiss: dismiss) }
+            )
     }
 
     // MARK: Header spacer (toolbar holds the actual header UI)
@@ -199,111 +190,6 @@ struct LevelsView: View {
         }
     }
 
-    // MARK: Wallet sheet
-    private var walletSheet: some View {
-        GeometryReader { proxy in
-            let fullH = max(360.0, proxy.size.height * 1.02)       // sheet height
-            let travel = max(1, fullH - walletPeek)
-            let openTravel = min(travel, 300)
-            // progress derived from state + live drag
-            let base: CGFloat = walletExpanded ? 1 : 0
-            let delta = -walletDrag / openTravel               // drag up -> progress+
-            let progress = min(1, max(0, base + delta))
-            let y = (1 - progress) * openTravel + (travel - openTravel)
-
-            VStack(alignment: .leading, spacing: 0) {
-                // Peek header (always visible in collapsed)
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: walletExpanded ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(maxWidth: .infinity)                 // center it
-                        .padding(.top, 8)
-
-                    HStack {
-                        Label("Wallet", systemImage: "wallet.pass")
-                            .font(.headline).foregroundStyle(.white)
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                            Text("\(levels.coins)").font(.headline).monospacedDigit()
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(.white.opacity(0.18), in: Capsule())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { toggleWallet() }
-
-                // Main wallet content (colorful card)
-                walletContent
-                    .padding(16)
-            }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .frame(height: fullH, alignment: .top)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.14, green: 0.61, blue: 0.98),
-                        Color(red: 0.56, green: 0.52, blue: 1.00),
-                        Color(red: 0.35, green: 0.88, blue: 0.67)
-                    ],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(.white.opacity(0.18), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 8)
-            .offset(y: y)                              // slide
-            .ignoresSafeArea(edges: .bottom)
-            // keep the external opacity progress in sync (for backdrop)
-            .onChange(of: walletDrag) { _, _ in walletExpansion = progress }
-            .onChange(of: walletExpanded) { _, open in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                    walletExpansion = open ? 1 : 0
-                }
-            }
-        }
-        // IMPORTANT: don’t constrain this to height: 0 — it’s an overlay aligned to bottom
-    }
-
-    // MARK: - Wallet CONTENT (sections only; no card/header)
-    private var walletContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-
-            // Buy Boosts
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Buy Boosts")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.9))
-
-                HStack(spacing: 10) {
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyRevealBoost(cost: 5) }
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyRevealBoost(cost: 12, count: 3) }
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyRevealBoost(cost: 35, count: 10) }
-                }
-            }
-
-            // Get Coins (IAP stubs)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Get Coins")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.9))
-
-                HStack(spacing: 10) {
-                    walletIAPPill(amount: 100,  price: "$0.99") { simulateIAPPurchase(coins: 100) }
-                    walletIAPPill(amount: 300,  price: "$2.99") { simulateIAPPurchase(coins: 300) }
-                    walletIAPPill(amount: 1200, price: "$7.99") { simulateIAPPurchase(coins: 1200) }
-                }
-            }
-        }
-    }
 
     @ViewBuilder
     private func destinationView(for world: World) -> some View {

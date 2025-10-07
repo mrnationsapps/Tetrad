@@ -30,7 +30,7 @@ struct TutorialWorldView: View {
         switch l1Step {
         case .placeFirst:   return (1, "Drag tiles onto the board to make words.")
         case .explainCost:  return (2, "Any further moves with that tile will cost a MOVE point.")
-        case .promptBoost:  return (3, "Tap the Boosts button to use a Reveal, which will reveal a letter!")
+        case .promptBoost:  return (3, "Tap the Boosts button to use a Reveal!")
         case .done:         return nil
         }
     }
@@ -99,22 +99,36 @@ struct TutorialWorldView: View {
                 )
             }
         }
-        // ⬇️ Instruction Callout Text
+        .navigationBarBackButtonHidden(true) //hides the system back button
+
+        // ⬇️ Instruction Callout Text (L1) + L2 hint
         .overlay(alignment: .bottomTrailing) {
             Group {
                 if let stepLine = l1StepContent {
                     CalloutCard {
-                        // exactly one numbered line at a time
-                        numberedStep(stepLine.index, stepLine.text)
+                        numberedStep(stepLine.index, stepLine.text)   // L1
                     }
                     .frame(maxWidth: 420)
-                    .padding(.trailing, 16) // align with Boosts pill trailing inset
-                    .padding(.bottom, 120)   // sit just above the Boosts pill
+                    .padding(.trailing, 0)
+                    .padding(.bottom, 120)   // sits above footer pills
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if step == .level2 {
+                    CalloutCard {
+                        Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: 420)
+                    .padding(.trailing, 0)
+                    .padding(.bottom, 120)
+                    .allowsHitTesting(false)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .offset(y: 80)
                 }
             }
         }
+
 
         // 🔔 Flip the Boosts gate ON when Level 1 reaches the “Tap Boosts…” step
         .onChange(of: l1Step) { _, newStep in
@@ -150,12 +164,15 @@ struct TutorialWorldView: View {
 
         // 👇 Footer + Panels for Tutorial (Boosts gated to Step 3; Wallet read-only)
         .withFooterPanels(
-            coins: nil,                  // you can pipe levels.coins if you want a badge on Wallet
-            boostsAvailable: nil,        // tutorial uses a gate instead of a count
-            // Gate footer taps: only interactive during Level 1 @ Step 3
-            isInteractable: (step == .level1 && tutorialAllowsBoosts),
+            coins: nil,
+            boostsAvailable: nil,
+            // ✅ Footer is interactable if: L2 OR (L1 and we’ve reached the Boost step)
+            isInteractable: (step == .level2) || (step == .level1 && tutorialAllowsBoosts),
+            disabledStyle: .ghosted,
             boostsPanel: { dismiss in
-                // ---- Tutorial Boosts panel (calls your existing tutorial reveal flow) ----
+                // Gate button enablement the same way
+                let boostsEnabled = (step == .level2) || (step == .level1 && tutorialAllowsBoosts)
+
                 VStack(alignment: .leading, spacing: 8) {
                     // Header
                     HStack(alignment: .top) {
@@ -163,14 +180,13 @@ struct TutorialWorldView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text(tutorialAllowsBoosts ? "Ready" : "Follow the steps first")
+                        Text(boostsEnabled ? "Unlimited" : "Follow the steps first")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
 
                     // Tiles row
                     HStack(alignment: .top, spacing: 12) {
-                        // 👉 REVEAL (triggers your tutorial reveal and closes)
                         Button {
                             NotificationCenter.default.post(name: .tutorialRevealRequested, object: nil)
                             #if os(iOS)
@@ -181,11 +197,11 @@ struct TutorialWorldView: View {
                             boostTile(icon: "wand.and.stars", title: "Reveal", material: .thinMaterial)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!tutorialAllowsBoosts)
-                        .opacity(tutorialAllowsBoosts ? 1.0 : 0.4)
+                        .disabled(!boostsEnabled)
+                        .opacity(boostsEnabled ? 1.0 : 0.4)
                         .alignmentGuide(.top) { d in d[.top] }
 
-                        // Placeholders (visual consistency with the main app)
+                        // placeholders
                         boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
                             .opacity(0.35)
                             .alignmentGuide(.top) { d in d[.top] }
@@ -198,7 +214,6 @@ struct TutorialWorldView: View {
                 }
             },
             walletPanel: { dismiss in
-                // ---- Tutorial Wallet panel (read-only note) ----
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Wallet", systemImage: "creditcard")
@@ -214,6 +229,7 @@ struct TutorialWorldView: View {
             }
         )
 
+
         // If you add purchases in tutorial later:
         .alert("Not enough coins", isPresented: $showInsufficientCoins) {
             Button("OK", role: .cancel) { }
@@ -228,13 +244,12 @@ struct TutorialWorldView: View {
 @ViewBuilder
 private func numberedStep(_ n: Int, _ text: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Image(systemName: "\(n).circle.fill")
-            .font(.title3)
-            .foregroundStyle(.tint)                 // <- or Color.accentColor
         Text(text)
-            .font(.headline)
-            .foregroundStyle(.primary)
+            .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .padding(10)
+            .multilineTextAlignment(.center)
     }
 }
 
@@ -242,10 +257,11 @@ private struct CalloutCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content
-            .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             .shadow(radius: 6, x: 0, y: 2)
+            .padding(.horizontal, 20)
+            .offset(y: 20)
     }
 }
 
@@ -254,8 +270,17 @@ private struct IntroLesson: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                Text("What’s a Word Square?")
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                (Text("TETRAD is based on the age-old \n")
+                 + Text("word square puzzle.").italic())
+                //.font(.system(size: 18))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+                (Text("What's a Word Square?"))
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+
                 Text("A word square is a grid where column n is the same as row n.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -263,13 +288,13 @@ private struct IntroLesson: View {
                 StaticSquare3x3(rows: ["BIT","ICE","TEN"])
                     .padding(.top, 4)
 
-                Text("Notice how ROW 1 = COLUMN 1, ROW 2 = COLUMN 2, etc.")
+                Text("Notice how Row 1 = Column 1, Row 2 = Column 2, etc.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
 
                 Button(action: onContinue) {
-                    Text("Continue")
+                    Text("Let's try one")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                 }
@@ -284,28 +309,36 @@ private struct IntroLesson: View {
 private struct StaticSquare3x3: View {
     let rows: [String]  // 3 strings of length 3
     var body: some View {
-        let letters = rows.map { Array($0) }
+        let letters = rows.map(Array.init)
+        let corner: CGFloat = 10
+
         VStack(spacing: 8) {
             ForEach(0..<3, id: \.self) { r in
                 HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { c in
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(LinearGradient(colors: [.purple.opacity(0.85), .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .overlay(
-                                Text(String(letters[r][c]))
-                                    .font(.system(size: 26, weight: .heavy))
-                                    .foregroundStyle(.white)
-                            )
-                            .frame(width: 64, height: 64)
-                            .shadow(radius: 6, x: 0, y: 4)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: corner)
+                                .fill(Color(.systemBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: corner)
+                                        .stroke(.secondary, lineWidth: 1)
+                                )
+
+                            Text(String(letters[r][c]))
+                                .font(.system(size: 24, weight: .heavy))
+                                .foregroundStyle(.primary)
+                        }
+                        .frame(width: 64, height: 64)
+                        .shadow(radius: 1, x: 0, y: 1)
                     }
                 }
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16)) // keep or remove if you prefer flat
     }
 }
+
 
 // MARK: - Overlays
 

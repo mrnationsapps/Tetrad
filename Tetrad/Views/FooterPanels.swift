@@ -16,6 +16,8 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
     // Panel builders (provide content; call `dismiss()` to close)
     let boostsPanel: (_ dismiss: @escaping () -> Void) -> BoostsContent
     let walletPanel: (_ dismiss: @escaping () -> Void) -> WalletContent
+    
+    let disabledStyle: FooterDisabledStyle
 
     // Internal presentation state
     @State private var showBoosts = false
@@ -96,6 +98,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     isWalletActive: $showWallet,
                     isBoostsActive: $showBoosts,
                     isInteractable: isInteractable,
+                    disabledStyle: disabledStyle,  
                     onTapWallet: {
                         if showBoosts {
                             withAnimation(.spring()) { showBoosts = false }
@@ -125,6 +128,7 @@ public extension View {
         coins: Int? = nil,
         boostsAvailable: Int? = nil,
         isInteractable: Bool = true,
+        disabledStyle: FooterDisabledStyle = .standard,
         panelHeight: CGFloat = 320,
         @ViewBuilder boostsPanel: @escaping (_ dismiss: @escaping () -> Void) -> BoostsContent,
         @ViewBuilder walletPanel: @escaping (_ dismiss: @escaping () -> Void) -> WalletContent
@@ -136,6 +140,7 @@ public extension View {
                 isInteractable: isInteractable,
                 boostsPanel: boostsPanel,
                 walletPanel: walletPanel,
+                disabledStyle: disabledStyle,
                 panelHeight: panelHeight
             )
         )
