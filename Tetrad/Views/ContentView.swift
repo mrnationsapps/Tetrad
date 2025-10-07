@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var game: GameState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var levels: LevelsService
 
     var skipDailyBootstrap: Bool = false
     var par: Int? = nil
@@ -129,9 +130,218 @@ struct ContentView: View {
             if isSolved { withAnimation(.spring()) { showWinPopup = true } }
         }
         .onAppear { showWinPopup = false }  // ensure clean state on re-entry
+        
+        .withFooterPanels(
+            coins: levels.coins,
+            boostsAvailable: boosts.remaining,
+            isInteractable: true,
+            disabledStyle: .standard,
+            boostsPanel: { dismiss in DailyBoostsPanel(dismiss: dismiss) },
+            walletPanel: { dismiss in DailyWalletPanel(dismiss: dismiss) }
+        )
+
     }
 
+    // MARK: - Daily Boosts Panel (Reveal wired to GameState)
+    private struct DailyBoostsPanel: View {
+        @EnvironmentObject var game: GameState
+        @EnvironmentObject var boosts: BoostsService
+        let dismiss: () -> Void
 
+        @State private var errorText: String?
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header
+                HStack(alignment: .top) {
+                    Label("Boosts", systemImage: "bolt.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(boosts.remaining) left")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Tiles row
+                HStack(alignment: .top, spacing: 12) {
+                    // REVEAL (active)
+                    Button(action: useSmartBoost) {
+                        BoostTile(icon: "wand.and.stars", title: "Reveal")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(boosts.remaining == 0)
+                    .opacity(boosts.remaining == 0 ? 0.4 : 1.0)
+                    .alignmentGuide(.top) { d in d[.top] }
+
+                    // Placeholders
+                    BoostTile(icon: "arrow.left.arrow.right", title: "Swap")
+                        .opacity(0.35)
+                        .alignmentGuide(.top) { d in d[.top] }
+
+                    BoostTile(icon: "eye", title: "Clarity")
+                        .opacity(0.35)
+                        .alignmentGuide(.top) { d in d[.top] }
+                        .padding(.top, 10)
+                }
+
+                if let errorText {
+                    Text(errorText).font(.footnote).foregroundStyle(.red)
+                        .padding(.top, 6)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+
+        private func useSmartBoost() {
+            guard boosts.remaining > 0 else {
+                errorText = "No Boosts left today."
+                return
+            }
+
+            // Try placing first; only consume if it worked
+            let success = game.applySmartBoost(movePenalty: 10)
+            if success {
+                _ = boosts.useOne()
+                #if os(iOS)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                dismiss()
+            } else {
+                errorText = "No safe placement found. Try a move first."
+            }
+        }
+    }
+
+    // MARK: - Daily Wallet Panel (buy boosts + coins)
+    private struct DailyWalletPanel: View {
+        @EnvironmentObject var levels: LevelsService
+        @EnvironmentObject var boosts: BoostsService
+        let dismiss: () -> Void
+
+        @State private var showInsufficientCoins = false
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    Label("Wallet", systemImage: "creditcard")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+                        Text("\(levels.coins)").font(.headline).monospacedDigit()
+                    }
+                    .softRaisedCapsule()
+                }
+
+                // Buy Boosts
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
+                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
+                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
+                    }
+                }
+
+                // Get Coins (IAP stubs)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Get Coins").font(.subheadline).foregroundStyle(.secondary)
+                    HStack(spacing: 10) {
+                        walletIAPPill(amount: 100,  price: "$0.99") { addCoins(100) }
+                        walletIAPPill(amount: 300,  price: "$2.99") { addCoins(300) }
+                        walletIAPPill(amount: 1200, price: "$7.99") { addCoins(1200) }
+                    }
+                }
+            }
+            .alert("Not enough coins", isPresented: $showInsufficientCoins) {
+                Button("OK", role: .cancel) { }
+            } message: { Text("You don't have enough coins for that purchase.") }
+        }
+
+        // Actions
+        private func buyReveal(cost: Int, count: Int) {
+            if levels.coins >= cost {
+                levels.addCoins(-cost)
+                boosts.grant(count: count)
+                #if os(iOS)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                dismiss()
+            } else {
+                showInsufficientCoins = true
+            }
+        }
+        private func addCoins(_ n: Int) {
+            levels.addCoins(n)
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
+            dismiss()
+        }
+
+        // Tiny pills (local copies)
+        @ViewBuilder
+        private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
+            Button(action: action) {
+                VStack(spacing: 6) {
+                    Image(systemName: icon).font(.headline)
+                    Text(title).font(.caption).lineLimit(1)
+                    HStack(spacing: 4) {
+                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+                        Text("\(cost)").font(.caption2).monospacedDigit()
+                    }.opacity(0.9)
+                }
+                .foregroundStyle(.primary)
+                .padding(.vertical, 10).padding(.horizontal, 12)
+                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+
+        @ViewBuilder
+        private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
+            Button(action: action) {
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+                        Text("+\(amount)").font(.caption).monospacedDigit()
+                    }
+                    Text(price).font(.caption2).opacity(0.9)
+                }
+                .foregroundStyle(.primary)
+                .padding(.vertical, 10).padding(.horizontal, 12)
+                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Small tile used in Boosts panel
+    private struct BoostTile: View {
+        let icon: String
+        let title: String
+        var body: some View {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.headline)
+                Text(title).font(.caption)
+            }
+            .foregroundStyle(.primary)
+            .padding(.vertical, 12).padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.14))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+            )
+        }
+    }
+
+    
     // MARK: - Header / Footer
 
     private var header: some View {
@@ -161,30 +371,18 @@ struct ContentView: View {
                                     .onChange(of: geo.size) { oldSize, newSize in
                                         bagHeight = newSize.height
                                     }
-                                    // Keep bagRect accurate only when bag is visible
-                                    .onChange(of: showBoostsPanel) { _, isShowing in
-                                        bagRect = isShowing ? .zero : geo.frame(in: .named("stage"))
-                                    }
+//                                    // Keep bagRect accurate only when bag is visible
+//                                    .onChange(of: showBoostsPanel) { _, isShowing in
+//                                        bagRect = isShowing ? .zero : geo.frame(in: .named("stage"))
+//                                    }
 
                             }
                         )
 
-//                    // Boosts panel
-//                    compactBoostsPanel
-//                        .frame(width: W)
-//                        .background(
-//                            GeometryReader { geo in
-//                                Color.clear
-//                                    .onAppear  { boostsHeight = geo.size.height }
-//                                    .onChange(of: geo.size) { _, newSize in
-//                                        boostsHeight = newSize.height
-//                                    }
-//                            }
-//                        )
                 }
-                .offset(x: showBoostsPanel ? -W : 0)                 // 👈 horizontal slide
-                .animation(.easeInOut(duration: 0.25), value: showBoostsPanel)
-                .clipped()
+//                .offset(x: showBoostsPanel ? -W : 0)                 // 👈 horizontal slide
+//                .animation(.easeInOut(duration: 0.25), value: showBoostsPanel)
+//                .clipped()
 
                 // Optional: share button floats inside the same region
                 if game.solved {
@@ -199,29 +397,6 @@ struct ContentView: View {
         // Keep a stable height so bag/panel occupy identical vertical space
         .frame(height: max(bagHeight, boostsHeight))
     }
-
-    // MARK: - Under-board controls
-//    private var underBoardControls: some View {
-//        HStack {
-//            Spacer()
-//            Button {
-//                withAnimation(.easeInOut(duration: 0.25)) {
-//                    showBoostsPanel.toggle()
-//                }
-//                // When the boosts panel is showing, disable bag hit-tests
-//                if showBoostsPanel { bagRect = .zero }
-//            } label: {
-//                HStack(spacing: 8) {
-//                    Image(systemName: showBoostsPanel ? "chevron.right" : "chevron.left")
-//                        .imageScale(.medium)
-//                    Text(showBoostsPanel ? "Letters" : "Boosts")
-//                }
-//                .foregroundStyle(.primary) // good contrast on soft surface
-//            }
-//            .buttonStyle(SoftRaisedPillStyle(height: 52))
-//        }
-//
-//    }
 
 
     // Reusable tile view (top-aligned content inside a fixed 72×72)
