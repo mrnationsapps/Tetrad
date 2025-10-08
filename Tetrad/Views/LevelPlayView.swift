@@ -65,94 +65,6 @@ struct LevelPlayView: View {
 
         // 3) win overlay (stays)
         .overlay(winOverlay)
-
-//        .withFooterPanels(
-//            coins: nil,
-//            boostsAvailable: nil,
-//            isInteractable: !showWin && !showWorldBanner,
-//            boostsPanel: { dismiss in
-//                VStack(alignment: .leading, spacing: 8) {
-//                    // Header
-//                    HStack(alignment: .top) {
-//                        Label("Boosts", systemImage: "bolt.fill")
-//                            .font(.caption)
-//                            .foregroundStyle(.secondary)
-//
-//                        Spacer()
-//
-//                        Text("\(boosts.remaining) left")
-//                            .font(.footnote)
-//                            .foregroundStyle(.secondary)
-//                    }
-//
-//                    // Tiles row
-//                    HStack(alignment: .top, spacing: 12) {
-//                        // BOOST: REVEAL
-//                        Button {
-//                            // Try to place first…
-//                            let success = game.applySmartBoost(movePenalty: 10)
-//                            if success {
-//                                // …only then consume from your real store
-//                                _ = boosts.useOne()
-//                                dismiss() // close panel on success
-//                            }
-//                        } label: {
-//                            boostTile(icon: "wand.and.stars", title: "Reveal", material: .thinMaterial)
-//                        }
-//                        .buttonStyle(.plain)
-//                        .disabled(!canUseBoost)
-//                        .alignmentGuide(.top) { d in d[.top] }
-//
-//                        // Placeholders (same top guide)
-//                        boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
-//                            .opacity(0.35)
-//                            .alignmentGuide(.top) { d in d[.top] }
-//
-//                        boostTile(icon: "eye", title: "Clarity", material: .thinMaterial)
-//                            .opacity(0.35)
-//                            .alignmentGuide(.top) { d in d[.top] }
-//                            .padding(.top, 10)
-//                    }
-//                }
-//            },
-//            walletPanel: { dismiss in
-//                VStack(alignment: .leading, spacing: 16) {
-//
-//                    // Buy Boosts
-//                    VStack(alignment: .leading, spacing: 8) {
-//                        Text("Spend coins on boosts")
-//                            .font(.subheadline)
-//                            .foregroundStyle(.secondary)
-//
-//                        HStack(spacing: 10) {
-//                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  {
-//                                buyRevealBoost(cost: 5, count: 1)
-//                            }
-//                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) {
-//                                buyRevealBoost(cost: 12, count: 3)
-//                            }
-//                            WalletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) {
-//                                buyRevealBoost(cost: 35, count: 10)
-//                            }
-//                        }
-//                    }
-//
-//                    // Get Coins (IAP stubs)
-//                    VStack(alignment: .leading, spacing: 8) {
-//                        Text("Buy Coins")
-//                            .font(.subheadline)
-//                            .foregroundStyle(.secondary)
-//
-//                        HStack(spacing: 10) {
-//                            WalletIAPPill(amount: 100,  price: "$0.99") { simulateIAPPurchase(coins: 100) }
-//                            WalletIAPPill(amount: 300,  price: "$2.99") { simulateIAPPurchase(coins: 300) }
-//                            WalletIAPPill(amount: 1200, price: "$7.99") { simulateIAPPurchase(coins: 1200) }
-//                        }
-//                    }
-//                }
-//            }
-//
-//        )
         
         .alert("Not enough coins", isPresented: $showInsufficientCoins) {
             Button("OK", role: .cancel) { }
@@ -209,7 +121,11 @@ struct LevelPlayView: View {
     // MARK: - Layers (kept small to help the type-checker)
 
     @ViewBuilder private var boardLayer: some View {
-        ContentView(skipDailyBootstrap: true, enableDailyWinUI: false)
+        ContentView(
+            skipDailyBootstrap: true, enableDailyWinUI: false,
+            showHeader: false    // ← hides the "TETRAD" title inside Level Play
+
+        )
     }
 
     @ViewBuilder private var bannerLayer: some View {
@@ -265,29 +181,31 @@ struct LevelPlayView: View {
     @ToolbarContentBuilder private var levelToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
             Button { dismiss() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: "chevron.left").imageScale(.medium)
+                    Text("Back")
                 }
+                .foregroundStyle(.primary)
             }
             .buttonStyle(SoftRaisedPillStyle(height: 36))
         }
 
-        ToolbarItem(placement: .principal) {
+        ToolbarItem(placement: .navigationBarTrailing) {
             Text("\(world.name) | L\(levels.levelIndex(for: world) + 1)")
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .tracking(1.5)
         }
 
-        ToolbarItem(placement: .navigationBarTrailing) {
-            HStack(spacing: 6) {
-                Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                Text("\(levels.coins)")
-                    .font(.headline)
-                    .monospacedDigit()
-            }
-            .softRaisedCapsule()
-        }
+//        ToolbarItem(placement: .navigationBarTrailing) {
+//            HStack(spacing: 6) {
+//                Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+//                Text("\(levels.coins)")
+//                    .font(.headline)
+//                    .monospacedDigit()
+//            }
+//            .softRaisedCapsule()
+//        }
     }
 
     @ViewBuilder private var winOverlay: some View {
@@ -298,24 +216,30 @@ struct LevelPlayView: View {
             VStack(spacing: 14) {
                 Text("You got it!").font(.title).bold()
 
+                // Base payout from your existing logic
                 let payout = levels.rewardCoins(for: game.moveCount, par: par)
+                // Gate payout for tutorial replays (0 after first completion)
+                let gp = levels.gatedPayout(total: payout.total, bonus: payout.bonus, for: world)
 
-                HStack(spacing: 6) {
-                    Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                    if payout.bonus > 0 {
-                        Text("+$\(payout.total)  (+$\(payout.bonus) bonus)").font(.headline)
-                    } else {
-                        Text("+$\(payout.total)").font(.headline)
+                // Show coin row only when there's something to show
+                if gp.total > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+                        if gp.bonus > 0 {
+                            Text("+$\(gp.total)  (+$\(gp.bonus) bonus)").font(.headline)
+                        } else {
+                            Text("+$\(gp.total)").font(.headline)
+                        }
                     }
+                    .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
 
                 let hasNext = levels.hasNextLevel(for: world)
 
                 if hasNext {
                     HStack(spacing: 10) {
                         Button {
-                            awardCoinsOnce(payout.total)
+                            _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
                             dismiss()
                         } label: {
                             Text("Quit").font(.headline).frame(maxWidth: .infinity)
@@ -323,7 +247,7 @@ struct LevelPlayView: View {
                         .buttonStyle(SoftRaisedPillStyle(height: 48))
 
                         Button {
-                            awardCoinsOnce(payout.total)
+                            _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
                             levels.advance(from: world)
                             showWin = false
                             startNewSession()
@@ -334,7 +258,11 @@ struct LevelPlayView: View {
                     }
                 } else {
                     Button {
-                        awardCoinsOnce(payout.total)
+                        _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
+                        // Mark tutorial complete AFTER awarding on the first full clear
+                        if world.isTutorial {
+                            levels.markTutorialCompleted()
+                        }
                         dismiss()
                     } label: {
                         Text("Continue").font(.headline).frame(maxWidth: .infinity)
@@ -348,6 +276,7 @@ struct LevelPlayView: View {
             .transition(.scale.combined(with: .opacity))
         }
     }
+
 
     // MARK: - Helpers
 
@@ -388,11 +317,13 @@ struct LevelPlayView: View {
         pendingWinDelay = false
     }
 
-    private func awardCoinsOnce(_ amount: Int) {
-        guard !didAwardCoins else { return }
-        didAwardCoins = true
-        levels.addCoins(amount)
-    }
+//    private func awardCoinsOnce(_ amount: Int) {
+//        guard !didAwardCoins else { return }
+//        didAwardCoins = true
+//        if amount > 0 {
+//            levels.addCoins(amount)
+//        }
+//    }
 
     /// Left → center (show), hold ~2s, right (hide)
     private func triggerWorldBanner() {

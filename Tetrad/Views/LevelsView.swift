@@ -62,23 +62,7 @@ struct LevelsView: View {
                         .tracking(2)
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "dollarsign.circle").imageScale(.large)
-                            Text("\(levels.coins)")
-                                .font(.headline)
-                                .monospacedDigit()
-                                .scaleEffect(coinPulse ? 1.12 : 1.0)
-                                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: coinPulse)
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .softRaisedCapsule()
-                }
+
             }
         
             // alerts

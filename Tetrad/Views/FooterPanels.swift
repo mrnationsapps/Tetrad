@@ -8,6 +8,7 @@ import SwiftUI
 
 /// Reusable host: attaches Boosts/Wallet slide-up panels + the Footer to any screen.
 public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: ViewModifier {
+    @EnvironmentObject private var levels: LevelsService
     // Footer inputs
     let coins: Int?
     let boostsAvailable: Int?
@@ -98,7 +99,8 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     isWalletActive: $showWallet,
                     isBoostsActive: $showBoosts,
                     isInteractable: isInteractable,
-                    disabledStyle: disabledStyle,  
+                    disabledStyle: disabledStyle,
+                    isWalletEnabled: levels.hasUnlockedNonTutorial,  
                     onTapWallet: {
                         if showBoosts {
                             withAnimation(.spring()) { showBoosts = false }
@@ -142,6 +144,7 @@ public extension View {
                 walletPanel: walletPanel,
                 disabledStyle: disabledStyle,
                 panelHeight: panelHeight
+
             )
         )
     }

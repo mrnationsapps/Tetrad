@@ -9,10 +9,12 @@ struct ContentView: View {
     var skipDailyBootstrap: Bool = false
     var par: Int? = nil
     var enableDailyWinUI: Bool = true   // ⬅️ new (default stays true for Daily)
+    var showHeader: Bool = true   // NEW: allow callers to hide the nav title
+
 
     // TESTING ONLY.  DO NOT LEAVE ON RELEASE
     @State private var boardTest: Int = 0          // shifts day away from today
-    @State private var boostTest: Int = 10         // adds boosts to your current number
+    @State private var boostTest: Int = 0         // adds boosts to your current number
     
     // MARK: Boosts
     @EnvironmentObject var boosts: BoostsService
@@ -97,12 +99,14 @@ struct ContentView: View {
 
         .navigationBarTitleDisplayMode(.inline)   // keep everything on one compact row
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("TETRAD")
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
-                    .tracking(3)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(x: 0)
+            if showHeader {
+                ToolbarItem(placement: .principal) {
+                    Text("TETRAD")
+                        .font(.system(size: 44, weight: .heavy, design: .rounded))
+                        .tracking(3)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .offset(x: 0)
+                }
             }
         }
 
@@ -139,8 +143,8 @@ struct ContentView: View {
             boostsPanel: { dismiss in DailyBoostsPanel(dismiss: dismiss) },
             walletPanel: { dismiss in DailyWalletPanel(dismiss: dismiss) }
         )
-
     }
+
 
     // MARK: - Daily Boosts Panel (Reveal wired to GameState)
     private struct DailyBoostsPanel: View {
@@ -615,7 +619,7 @@ struct ContentView: View {
             if lockedByWorld && isOnBoard {
                 return AnyShapeStyle(
                     LinearGradient(
-                        colors: [Color.purple.opacity(0.95), Color.purple],
+                        colors: [Color.purple.opacity(0.20), Color.purple.opacity(0.20)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
@@ -633,7 +637,7 @@ struct ContentView: View {
         }()
 
         let textColor: Color = {
-            if (lockedByWorld && isOnBoard) || ((lockedByBoost || solved) && isOnBoard) { return .white }
+            if (lockedByWorld && isOnBoard) || ((lockedByBoost || solved) && isOnBoard) { return .black }
             return .primary
         }()
 

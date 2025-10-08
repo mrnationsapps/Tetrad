@@ -13,21 +13,27 @@ public enum FooterDisabledStyle {
     var saturation: Double { self == .standard ? 1.0 : 0.55 }
 }
 
-
 public struct Footer: View {
-    // Read-only display inputs (optional badges)
+    // (Optional) fallback so the badge always shows the live coin count even if `coins == nil`
+    @EnvironmentObject private var levels: LevelsService
+    private var coinDisplay: Int { coins ?? levels.coins }
+
+    // Read-only display inputs
     public var coins: Int? = nil
     public var boostsAvailable: Int? = nil
-    public var disabledStyle: FooterDisabledStyle = .standard   // ← new
+    public var disabledStyle: FooterDisabledStyle = .standard
 
-    // Visual "selected" states (parent controls these)
+    // Selected states
     @Binding public var isWalletActive: Bool
     @Binding public var isBoostsActive: Bool
 
-    // Interactivity gate (e.g., disable during banner/win-sheet/tutorial lock)
+    // Global footer interactivity (unchanged)
     public var isInteractable: Bool = true
 
-    // Actions (parent decides what to present)
+    // NEW: enable/disable ONLY the Wallet button (not the badge)
+    public var isWalletEnabled: Bool = true
+
+    // Actions
     public var onTapWallet: () -> Void
     public var onTapBoosts: () -> Void
 
@@ -44,6 +50,7 @@ public struct Footer: View {
         isBoostsActive: Binding<Bool>,
         isInteractable: Bool = true,
         disabledStyle: FooterDisabledStyle = .standard,
+        isWalletEnabled: Bool = true,                 // NEW
         onTapWallet: @escaping () -> Void,
         onTapBoosts: @escaping () -> Void,
         barBackground: AnyShapeStyle = AnyShapeStyle(.ultraThinMaterial),
@@ -56,7 +63,8 @@ public struct Footer: View {
         self._isWalletActive = isWalletActive
         self._isBoostsActive = isBoostsActive
         self.isInteractable = isInteractable
-        self.disabledStyle = disabledStyle              
+        self.disabledStyle = disabledStyle
+        self.isWalletEnabled = isWalletEnabled
         self.onTapWallet = onTapWallet
         self.onTapBoosts = onTapBoosts
         self.barBackground = barBackground
@@ -67,31 +75,42 @@ public struct Footer: View {
 
     public var body: some View {
         HStack(spacing: 12) {
-            // WALLET
-            Button(action: onTapWallet) {
-                LabeledPill(
-                    title: "Wallet",
-                    systemImage: "creditcard",
-                    badgeCount: coins
+            // WALLET (button can be disabled, badge stays bright)
+            ZStack(alignment: .topTrailing) {
+                Button(action: onTapWallet) {
+                    LabeledPill(
+                        title: "Wallet",
+                        systemImage: "creditcard",
+                        badgeCount: nil // we render our own badge so it won't be dimmed
+                    )
+                    .accessibilityLabel(Text("Open Wallet"))
+                }
+                .buttonStyle(FooterPillButtonStyle(height: pillHeight))
+                .background(
+                    Capsule().fill(
+                        isWalletActive
+                        ? Color.accentColor.opacity(0.18)
+                        : Color(.secondarySystemBackground)
+                    )
                 )
-                .accessibilityLabel(Text("Open Wallet"))
-            }
-            .buttonStyle(FooterPillButtonStyle(height: pillHeight))
-            .background(
-                Capsule().fill(
-                    isWalletActive
-                    ? Color.accentColor.opacity(0.18)
-                    : Color(.secondarySystemBackground)
+                .overlay(
+                    Capsule().stroke(
+                        isWalletActive ? Color.accentColor : Color.primary.opacity(0.12),
+                        lineWidth: isWalletActive ? 1.25 : 1
+                    )
                 )
-            )
-            .overlay(
-                Capsule().stroke(
-                    isWalletActive ? Color.accentColor : Color.primary.opacity(0.12),
-                    lineWidth: isWalletActive ? 1.25 : 1
-                )
-            )
+                // Disable & subtly dim ONLY the button
+                .disabled(!isInteractable || !isWalletEnabled)
+                .opacity(isWalletEnabled ? 1.0 : 0.5)
+                .grayscale(isWalletEnabled ? 0 : 0.25)
 
-            // BOOSTS
+                // 🔴 Always-on coin badge — not affected by button dimming
+                CoinBadge(coins: coinDisplay)   // uses your shared red badge
+                    .offset(x: 9, y: -7)
+                    .allowsHitTesting(false)
+            }
+
+            // BOOSTS (unchanged)
             Button(action: onTapBoosts) {
                 LabeledPill(
                     title: "Boosts",
@@ -117,15 +136,42 @@ public struct Footer: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .allowsHitTesting(isInteractable)
-        .opacity(isInteractable ? 1 : 0.6)
-        // ↓ stronger ghosting when disabledStyle == .ghosted
+        .allowsHitTesting(isInteractable)             // global footer lock (unchanged)
         .opacity(isInteractable ? 1 : disabledStyle.opacity)
         .grayscale(isInteractable ? 0 : disabledStyle.grayscale)
         .saturation(isInteractable ? 1 : disabledStyle.saturation)
     }
-
 }
+
+
+
+// Small, legible badge used on the Wallet pill
+private struct CoinBadge: View {
+    let coins: Int
+    private var text: String {
+        coins > 999 ? "999+" : "\(coins)"
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .heavy, design: .rounded)) // bigger than 11
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(Color(red: 0.95, green: 0.23, blue: 0.24)) // rich red
+            )
+            .overlay(
+                Capsule().stroke(.white.opacity(0.75), lineWidth: 0.5) // subtle ring
+            )
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .minimumScaleFactor(0.8)
+    }
+}
+
+
+
+
 
 // MARK: - Labeled pill with optional badge
 

@@ -29,7 +29,7 @@ enum WorldsCatalog {
         World(id: "food",
               name: "Food",
               artName: "WorldCard_Food",
-              unlockCost: 10,
+              unlockCost: 6,
               dictionaryID: "Food_Drink_Dictionary",
               isTutorial: false),
 

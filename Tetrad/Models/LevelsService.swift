@@ -18,10 +18,14 @@ final class LevelsService: ObservableObject {
     // Persisted sets
     @Published private(set) var unlockedIDs: Set<String> = ["tutorial"]
 
+    // Tutorial coin gate (persisted)
+    @Published var tutorialCompleted: Bool = false
+
     // MARK: - Storage keys
-    private let kCoins          = "levels.coins"
-    private let kUnlockedIDs    = "levels.unlocked.ids"
-    private let kSelectedID     = "levels.selected.id"
+    private let kCoins               = "levels.coins"
+    private let kUnlockedIDs         = "levels.unlocked.ids"
+    private let kSelectedID          = "levels.selected.id"
+    private let kTutorialCompleted   = "levels.tutorial.completed" // NEW
 
     init() {
         load()
@@ -36,6 +40,15 @@ final class LevelsService: ObservableObject {
 
     // MARK: - Public helpers
 
+    var hasUnlockedNonTutorial: Bool {
+        unlockedIDs.contains { id in
+            if let w = worlds.first(where: { $0.id == id }) {
+                return !w.isTutorial
+            }
+            return false
+        }
+    }
+
     var selectedWorld: World {
         worlds.first(where: { $0.id == selectedWorldID }) ?? worlds[0]
     }
@@ -47,6 +60,38 @@ final class LevelsService: ObservableObject {
     func select(_ world: World) {
         selectedWorldID = world.id
         saveSelected()
+    }
+
+    // Returns the amount actually awarded (0 if blocked)
+    @discardableResult
+    func awardCoinsIfAllowed(_ amount: Int, in world: World?, markTutorialCompletedIfFinal: Bool = false) -> Int {
+        guard amount > 0 else { return 0 }
+
+        // Tutorial gating
+        if let w = world, w.isTutorial {
+            if tutorialCompleted { return 0 }        // replays: no coins
+            addCoins(amount)
+            if markTutorialCompletedIfFinal {
+                markTutorialCompleted()
+            }
+            return amount
+        }
+
+        // Non-tutorial: always award
+        addCoins(amount)
+        return amount
+    }
+
+    // Convenience for tutorial flows when you don't have a World instance handy
+    @discardableResult
+    func awardCoinsIfAllowedInTutorial(_ amount: Int, markCompletedIfFinal: Bool = false) -> Int {
+        guard amount > 0 else { return 0 }
+        if tutorialCompleted { return 0 }
+        addCoins(amount)
+        if markCompletedIfFinal {
+            markTutorialCompleted()
+        }
+        return amount
     }
 
     /// Try to unlock the selected world using coins. Returns true if unlocked.
@@ -67,6 +112,36 @@ final class LevelsService: ObservableObject {
         guard delta != 0 else { return }
         coins = max(0, coins + delta)
         saveCoins()
+    }
+
+    // MARK: - Tutorial coin gating
+
+    /// True if tutorial coins are still allowed (i.e., first completion not yet recorded).
+    var tutorialCoinsEnabled: Bool { !tutorialCompleted }
+
+    /// Call this when the player finishes the **final tutorial level** for the first time.
+    func markTutorialCompleted() {
+        guard !tutorialCompleted else { return }
+        tutorialCompleted = true
+        saveTutorialCompleted()
+    }
+
+    /// Returns false if this is a tutorial world **and** the tutorial has already been completed.
+    func shouldAwardCoins(in world: World?) -> Bool {
+        guard let w = world else { return true }
+        if w.isTutorial && tutorialCompleted { return false }
+        return true
+    }
+
+    /// Helper to zero out a computed payout tuple for tutorial replays.
+    /// Usage:
+    ///   let base = (total, bonus)
+    ///   let gated = levels.gatedPayout(total: base.total, bonus: base.bonus, for: world)
+    func gatedPayout(total: Int, bonus: Int, for world: World?) -> (total: Int, bonus: Int) {
+        guard let w = world, w.isTutorial, tutorialCompleted else {
+            return (total, bonus)
+        }
+        return (0, 0)
     }
 
     // MARK: - Private: ordering + persistence
@@ -103,12 +178,16 @@ final class LevelsService: ObservableObject {
         } else {
             selectedWorldID = "tutorial"
         }
+
+        // tutorial completed
+        tutorialCompleted = ud.bool(forKey: kTutorialCompleted)
     }
 
     private func save() {
         saveCoins()
         saveUnlocked()
         saveSelected()
+        saveTutorialCompleted()
     }
 
     private func saveCoins() {
@@ -124,7 +203,12 @@ final class LevelsService: ObservableObject {
     private func saveSelected() {
         UserDefaults.standard.set(selectedWorldID, forKey: kSelectedID)
     }
+
+    private func saveTutorialCompleted() {
+        UserDefaults.standard.set(tutorialCompleted, forKey: kTutorialCompleted)
+    }
 }
+
 
 // MARK: - Progression (50 levels per world, de-duplicated names)
 extension LevelsService {

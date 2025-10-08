@@ -24,6 +24,7 @@ struct TutorialWorldView: View {
 
     // inside struct TutorialWorldView
     @State private var l1Step: L1Step = .placeFirst
+    @State private var lastAwardedCoins: Int = 0   // ← NEW: tracks what we actually granted
 
     private var l1StepContent: (index: Int, text: String)? {
         guard step == .level1 else { return nil }
@@ -61,7 +62,9 @@ struct TutorialWorldView: View {
                     // (Old) onRequestBoosts used to show a sheet; keep as a no-op now.
                     onRequestBoosts: { /* handled via footer Boosts panel */ },
                     onWin: {
-                        levels.addCoins(3)
+                        // FIRST tutorial level: award coins only if allowed (first-ever run)
+                        let awarded = levels.awardCoinsIfAllowedInTutorial(3)
+                        lastAwardedCoins = awarded
                         step = .level1Win
                     },
                     // 2nd tile placed → advance to step 3
@@ -70,7 +73,9 @@ struct TutorialWorldView: View {
 
             case .level1Win:
                 WinSheet(
-                    message: "You've got it! Collect 3 coins!\nMove on to Level 2",
+                    message: lastAwardedCoins > 0
+                        ? "You've got it! Collect 3 coins!\nMove on to Level 2"
+                        : "Move on to Level 2",
                     primary: ("Continue", { step = .level2 }),
                     secondary: ("Quit", { dismiss() })
                 )
@@ -86,14 +91,18 @@ struct TutorialWorldView: View {
                     onFirstPlacement: {},
                     onRequestBoosts: {},
                     onWin: {
-                        levels.addCoins(3)
+                        // FINAL tutorial level: award if allowed, and mark tutorial completed
+                        let awarded = levels.awardCoinsIfAllowedInTutorial(3, markCompletedIfFinal: true)
+                        lastAwardedCoins = awarded
                         step = .level2Win
                     }
                 )
 
             case .level2Win:
                 WinSheet(
-                    message: "You've got it! Collect 3 coins!",
+                    message: lastAwardedCoins > 0
+                        ? "You've got it! Collect 3 coins!"
+                        : "",
                     primary: ("Continue", { dismiss() }),
                     secondary: nil
                 )
@@ -129,7 +138,6 @@ struct TutorialWorldView: View {
             }
         }
 
-
         // 🔔 Flip the Boosts gate ON when Level 1 reaches the “Tap Boosts…” step
         .onChange(of: l1Step) { _, newStep in
             if step == .level1 {
@@ -153,13 +161,13 @@ struct TutorialWorldView: View {
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .tracking(1.5)
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 6) {
-                    Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                    Text("\(levels.coins)").font(.headline).monospacedDigit()
-                }
-                .softRaisedCapsule()
-            }
+//            ToolbarItem(placement: .navigationBarTrailing) {
+//                HStack(spacing: 6) {
+//                    Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+//                    Text("\(levels.coins)").font(.headline).monospacedDigit()
+//                }
+//                .softRaisedCapsule()
+//            }
         }
 
         // 👇 Footer + Panels for Tutorial (Boosts gated to Step 3; Wallet read-only)
@@ -220,7 +228,10 @@ struct TutorialWorldView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Close") { dismiss() }.buttonStyle(.bordered)
+                        HStack(spacing: 6) {
+                            Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+                            Text("\(levels.coins)").font(.headline).monospacedDigit()
+                        }
                     }
                     Text("You’ll start earning and spending coins after the tutorial.")
                         .font(.footnote)
@@ -228,7 +239,6 @@ struct TutorialWorldView: View {
                 }
             }
         )
-
 
         // If you add purchases in tutorial later:
         .alert("Not enough coins", isPresented: $showInsufficientCoins) {
