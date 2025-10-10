@@ -33,13 +33,14 @@ struct ContentView: View {
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
     @State private var bagGap: CGFloat = 0         // spacing between bag tiles
     @State private var boardRect: CGRect = .zero
-    @State private var bagRect:   CGRect = .zero
     // Shared space measurement for bag/panel
     @State private var bagHeight: CGFloat = 0
     @State private var boostsHeight: CGFloat = 0
     @State private var showWinPopup = false
     @State private var bagGridRect: CGRect = .zero   // precise hit area = LazyVGrid
     @State private var bagGridWidth: CGFloat = 0
+//    @State private var activeDragID: UUID? = nil   // backup for stage-level .onEnded
+
     
     // TESTING HELPERS
     private var effectiveBoostsRemaining: Int {
@@ -371,22 +372,17 @@ struct ContentView: View {
                         .background(
                             GeometryReader { geo in
                                 Color.clear
-                                    .onAppear  { bagHeight = geo.size.height }
+                                    .onAppear  {
+                                        bagHeight = geo.size.height
+                                    }
                                     .onChange(of: geo.size) { oldSize, newSize in
                                         bagHeight = newSize.height
                                     }
-//                                    // Keep bagRect accurate only when bag is visible
-//                                    .onChange(of: showBoostsPanel) { _, isShowing in
-//                                        bagRect = isShowing ? .zero : geo.frame(in: .named("stage"))
-//                                    }
 
                             }
                         )
 
                 }
-//                .offset(x: showBoostsPanel ? -W : 0)                 // 👈 horizontal slide
-//                .animation(.easeInOut(duration: 0.25), value: showBoostsPanel)
-//                .clipped()
 
                 // Optional: share button floats inside the same region
                 if game.solved {
@@ -454,7 +450,7 @@ struct ContentView: View {
         let bagTiles = game.tiles.filter { $0.location == .bag }
         let columns  = [GridItem(.adaptive(minimum: bagTileSize), spacing: bagGap)]
 
-        // Compute reserved height from measured width so the grid doesn't shrink
+        // Compute reserved height using the last measured width of the whole bag
         let width = max(1, bagGridWidth)
         let cols = max(1, Int(floor((width + bagGap) / (bagTileSize + bagGap))))
         let totalTiles = game.tiles.count                 // full capacity (usually 16)
@@ -481,7 +477,7 @@ struct ContentView: View {
                                 ghostSize = .init(width: bagTileSize, height: bagTileSize)
                             },
                             onDragEnded: { stagePoint in
-                                handleDrop(of: tile, at: stagePoint)   // drop anywhere in the grid
+                                handleDrop(of: tile, at: stagePoint)
                             }
                         )
                         .overlay(
@@ -499,9 +495,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            // Lock height only after width is measured
             .frame(height: (bagGridWidth > 0) ? reservedHeight : nil, alignment: .top)
-            // Empty state overlay (centered vertically in the reserved area)
             .overlay(
                 Group {
                     if bagTiles.isEmpty {
@@ -510,31 +504,34 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
-                            .allowsHitTesting(false)   // don’t block drops
+                            .allowsHitTesting(false)
                             .transition(.opacity)
                     }
                 },
                 alignment: .center
             )
-            // Measure width + keep drag/drop hit area aligned to the whole grid
-            .background(
-                GeometryReader { gridGeo in
-                    Color.clear
-                        .onAppear {
-                            bagGridWidth = gridGeo.size.width
-                            bagRect = gridGeo.frame(in: .named("stage"))
-                        }
-                        .onChange(of: gridGeo.size) { _, newSize in
-                            bagGridWidth = newSize.width
-                            bagRect = gridGeo.frame(in: .named("stage"))
-                        }
-                        .onChange(of: showBoostsPanel) { _, isShowing in
-                            bagRect = isShowing ? .zero : gridGeo.frame(in: .named("stage"))
-                        }
-                }
-            )
         }
+        // Make the *whole* bag area a single, solid hit target (no holes)
+        .contentShape(Rectangle())
+
+        // 🔴 Single source of truth for BOTH the bag rect and width
+        .background(
+            GeometryReader { bagGeo in
+                Color.clear
+                    .onAppear {
+                        bagGridWidth = bagGeo.size.width
+                        // DEBUG:
+                        // print("📐 bagRect appear:", bagRect)
+                    }
+                    .onChange(of: bagGeo.size) { _, _ in
+                        bagGridWidth = bagGeo.size.width
+                        // DEBUG:
+                        // print("📐 bagRect change:", bagRect)
+                    }
+            }
+        )
     }
+
     
     @ViewBuilder
     private func boardGrid(cell: CGFloat, gap: CGFloat, boardSize: CGFloat) -> some View {
@@ -612,32 +609,38 @@ struct ContentView: View {
         let lockedByBoost = game.boostedLockedTileIDs.contains(tile.id)
         let lockedByWorld = game.worldLockedTileIDs.contains(tile.id)
         let solved        = game.solved
+        let solvedOnBoard = solved && isOnBoard
         let lockedOnBoard = (lockedByBoost || lockedByWorld || solved) && isOnBoard
 
-        // Shape fill as a ShapeStyle (not a View)
+        // Fill (solved has highest precedence)
         let tileFillStyle: AnyShapeStyle = {
-            if lockedByWorld && isOnBoard {
+            if solvedOnBoard {                         // ✅ board solved → green
+                return AnyShapeStyle(Color.green)
+            }
+            if lockedByBoost && isOnBoard {            // boost-locked also green
+                return AnyShapeStyle(Color.green)
+            }
+            if lockedByWorld && isOnBoard {            // world-locked (unsolved) → purple
                 return AnyShapeStyle(
                     LinearGradient(
                         colors: [Color.purple.opacity(0.20), Color.purple.opacity(0.20)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
-            } else if (lockedByBoost || solved) && isOnBoard {
-                return AnyShapeStyle(Color.green)
-            } else {
-                return AnyShapeStyle(Color(.systemBackground))
             }
+            return AnyShapeStyle(Color(.systemBackground))
         }()
 
+        // Stroke
         let strokeColor: Color = {
+            if solvedOnBoard || (lockedByBoost && isOnBoard) { return .green.opacity(0.85) }
             if lockedByWorld && isOnBoard { return .white.opacity(0.85) }
-            if (lockedByBoost || solved) && isOnBoard { return .green.opacity(0.85) }
             return .secondary
         }()
 
+        // Letter
         let textColor: Color = {
-            if (lockedByWorld && isOnBoard) || ((lockedByBoost || solved) && isOnBoard) { return .black }
+            if solvedOnBoard || ((lockedByBoost || lockedByWorld) && isOnBoard) { return .black }
             return .primary
         }()
 
@@ -654,13 +657,13 @@ struct ContentView: View {
                 .font(.title3).bold()
                 .foregroundStyle(textColor)
 
-            // 2s SHIMMER ON PURPLE-LOCKED TILES
-            if game.worldShimmerIDs.contains(tile.id) {
+            // 2s SHIMMER ON PURPLE-LOCKED TILES (suppress after solved)
+            if game.worldShimmerIDs.contains(tile.id) && !solvedOnBoard {
                 ShimmerOverlay(
                     duration: 1.5,
-                    bandScale: 1.4,  // width
+                    bandScale: 1.4,
                     minBand: 10,
-                    thickness: 24,   // height
+                    thickness: 24,
                     angleDeg: 0,
                     peakOpacity: 0.45,
                     overscan: 60
@@ -681,6 +684,7 @@ struct ContentView: View {
                     draggingTileID = tile.id
                     dragPoint = toStage(value.location)
                     onDragBegan()
+                    // activeDragID = tile.id
                 }
                 .onEnded { value in
                     guard !lockedOnBoard else { return }
@@ -689,6 +693,7 @@ struct ContentView: View {
                 }
         )
     }
+
 
 
 
@@ -939,6 +944,7 @@ struct ContentView: View {
             x: stagePoint.x - boardRect.minX,
             y: stagePoint.y - boardRect.minY
         )
+
         if let coord = coordFrom(
             pointInBoard: localPoint,
             cell: currentBoardCell,
@@ -948,18 +954,17 @@ struct ContentView: View {
             return
         }
 
-        // 2) Otherwise, if it's inside (or near) the LazyVGrid, return to bag
-        //    bagRect should be the LazyVGrid frame captured in stage space.
-        let hitRect = bagRect.insetBy(dx: -12, dy: -12)  // gentle expansion
-        if hitRect.contains(stagePoint) {
-            if case .board(let prev) = tile.location {
-                game.removeTile(from: prev)
-            }
-            return
+        // 2) Not a board drop → if the tile originated ON the board, return it to the bag.
+        //    (No reliance on bagRect; works when dropping directly on top of bag tiles, in gaps, anywhere.)
+        if case .board(let prev) = tile.location {
+            game.removeTile(from: prev)
         }
 
-        // 3) Else: no change (tile stays where it was)
+        // 3) If the tile originated in the bag and we didn't hit the board,
+        //    do nothing (it stays in the bag).
     }
+
+
 
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {

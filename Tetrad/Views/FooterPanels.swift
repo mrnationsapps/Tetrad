@@ -33,8 +33,11 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
             .overlay {
                 if showBoosts {
                     ZStack(alignment: .bottom) {
-                        Color.clear
+                        // ⬇️ Make scrim tappable (not clear)
+                        Rectangle()
+                            .fill(Color.black.opacity(0.01))
                             .ignoresSafeArea()
+                            .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.spring()) { showBoosts = false } }
 
                         VStack(spacing: 0) {
@@ -60,12 +63,15 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     .zIndex(50)
                 }
             }
+
             // WALLET slide-up (with scrim) – same container for consistency
             .overlay {
                 if showWallet {
                     ZStack(alignment: .bottom) {
-                        Color.clear
+                        Rectangle()
+                            .fill(Color.black.opacity(0.01))
                             .ignoresSafeArea()
+                            .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.spring()) { showWallet = false } }
 
                         VStack(spacing: 0) {
@@ -91,6 +97,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     .zIndex(50)
                 }
             }
+
             // Footer bar (drives the toggles)
             .safeAreaInset(edge: .bottom) {
                 Footer(
@@ -100,7 +107,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     isBoostsActive: $showBoosts,
                     isInteractable: isInteractable,
                     disabledStyle: disabledStyle,
-                    isWalletEnabled: levels.hasUnlockedNonTutorial,  
+                    isWalletEnabled: levels.hasUnlockedNonTutorial,
                     onTapWallet: {
                         if showBoosts {
                             withAnimation(.spring()) { showBoosts = false }
@@ -120,9 +127,9 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                 )
                 .zIndex(10)
             }
-
     }
 }
+
 
 public extension View {
     /// Attach a reusable Footer + slide-up panels to any screen.

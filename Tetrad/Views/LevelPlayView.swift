@@ -21,16 +21,23 @@ struct LevelPlayView: View {
     @State private var bannerSize: CGSize = .zero
     @State private var boostTest: Int = 0   // TEMP: remove when wired to real boosts store
     @State private var showInsufficientCoins = false
+    @State private var isGenerating = false
+    @State private var walletTargetGlobal: CGPoint? = nil
+    @State private var rewardCount: Double = 0
+    @State private var coinFly = false
 
 
     // MARK: - Main Body
     var body: some View {
         ZStack {
             boardLayer
-            bannerLayer
+                .modifier(FreezeAnimations(active: showWorldBanner)) // <- board never shifts
+
+                .overlay(alignment: .center) { auraOverlay }   // UNDER banner
+                .overlay(alignment: .center) { bannerOverlay } // OVER aura
         }
         // 1) particle aura
-        .overlay(auraOverlay, alignment: .center)
+        //.overlay(auraOverlay, alignment: .center)
 
         // 2) your existing animations / toolbar / lifecycle
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
@@ -63,6 +70,8 @@ struct LevelPlayView: View {
             }
         }
 
+        .overlay(generatingOverlay)
+
         // 3) win overlay (stays)
         .overlay(winOverlay)
         
@@ -71,10 +80,31 @@ struct LevelPlayView: View {
         } message: {
             Text("You don't have enough coins for that purchase.")
         }
-
-
+        
+        .onPreferenceChange(WalletTargetKey.self) { walletTargetGlobal = $0 }
     }
     
+    @ViewBuilder
+    private var generatingOverlay: some View {
+        if isGenerating {
+            ZStack {
+                Color.black.opacity(0.18).ignoresSafeArea()
+
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Generating Puzzle…")
+                        .font(.headline.weight(.semibold))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
+            }
+            .transition(.opacity)
+            .zIndex(100)
+        }
+    }
+
     private var effectiveBoostsRemaining: Int {
         // Use your real counter — pick the one that compiles:
         // return game.availableBoostsCount
@@ -128,53 +158,41 @@ struct LevelPlayView: View {
         )
     }
 
-    @ViewBuilder private var bannerLayer: some View {
+    @ViewBuilder
+    private var bannerOverlay: some View {
         if showWorldBanner, let word = game.worldWord {
             WorldWordBanner(
                 word: word.uppercased(),
                 gradient: worldGradient(for: world)
             )
+            .fixedSize() // don’t consume layout
             .background(
                 GeometryReader { g in
                     Color.clear
                         .onAppear { bannerSize = g.size }
-                        .onChange(of: g.size) { _, newSize in
-                            bannerSize = newSize
-                        }
+                        .onChange(of: g.size) { _, s in bannerSize = s }
                 }
             )
-            .transition(
-                .asymmetric(
-                    insertion: .move(edge: .leading).combined(with: .opacity),
-                    removal:   .move(edge: .trailing).combined(with: .opacity)
-                )
-            )
-            .zIndex(10)
+            .transition(.opacity)
             .allowsHitTesting(false)
+            .zIndex(10)
         }
     }
 
-    @ViewBuilder private var auraOverlay: some View {
-        if showWorldBanner, bannerSize != .zero {
-            let auraPadding: CGFloat = 50   // distance outside the pill
-            ParticleAura(
-                padding: 10,                 // small inset inside aura frame
-                count: 18,
-                speed: 0.45,
-                size: 6.0,
-                tint: worldParticleTint(for: world),
-                blendNormal: true,
-                wiggle: 10.0,
-                radialJitter: 40,
-                speedJitter: 0.30
-            )
-            .frame(
-                width:  bannerSize.width  + auraPadding * 2,
-                height: bannerSize.height + auraPadding * 2
-            )
-            .allowsHitTesting(false)
-            .transition(.opacity)
-            .zIndex(11)
+    @ViewBuilder
+    private var auraOverlay: some View {
+        if showWorldBanner {
+            // Fallback size so you see particles even before bannerSize arrives
+            let w = (bannerSize == .zero ? 260 : bannerSize.width)  + 100
+            let h = (bannerSize == .zero ?  90 : bannerSize.height) + 100
+
+            ParticleAura()
+                .frame(width: w, height: h)
+                .opacity(0.9)
+                .allowsHitTesting(false)
+                .zIndex(9) // under the banner
+                // simple fade; doesn’t affect layout
+                .transition(.opacity)
         }
     }
 
@@ -210,75 +228,94 @@ struct LevelPlayView: View {
 
     @ViewBuilder private var winOverlay: some View {
         if showWin {
-            Color.black.opacity(0.25).ignoresSafeArea()
-                .transition(.opacity)
+            ZStack {
+                // Dim background
+                Color.black.opacity(0.25)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
 
-            VStack(spacing: 14) {
-                Text("You got it!").font(.title).bold()
+                // 🎉 Confetti aura (behind the panel)
+                ParticleAura()
+                    .opacity(0.9)
+                    .allowsHitTesting(false)
 
-                // Base payout from your existing logic
-                let payout = levels.rewardCoins(for: game.moveCount, par: par)
-                // Gate payout for tutorial replays (0 after first completion)
-                let gp = levels.gatedPayout(total: payout.total, bonus: payout.bonus, for: world)
+                // Panel
+                VStack(spacing: 14) {
+                    Text("Level Complete!")
+                        .font(.title).bold()
 
-                // Show coin row only when there's something to show
-                if gp.total > 0 {
-                    HStack(spacing: 6) {
+                    let payout = levels.rewardCoins(for: game.moveCount, par: par)
+
+                    // Reward row with counting number
+                    HStack(spacing: 8) {
                         Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                        if gp.bonus > 0 {
-                            Text("+$\(gp.total)  (+$\(gp.bonus) bonus)").font(.headline)
-                        } else {
-                            Text("+$\(gp.total)").font(.headline)
-                        }
+                        Text("Reward:").font(.headline)
+                        CountUpLabel(value: rewardCount)
+                            .foregroundStyle(.primary)
+                        Text("coins")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(.secondary)
-                }
-
-                let hasNext = levels.hasNextLevel(for: world)
-
-                if hasNext {
-                    HStack(spacing: 10) {
-                        Button {
-                            _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
-                            dismiss()
-                        } label: {
-                            Text("Quit").font(.headline).frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+                    .onAppear {
+                        // Award once, then animate the number
+                        awardCoinsOnce(payout.total)
+                        rewardCount = 0
+                        withAnimation(.easeOut(duration: 1.0)) {
+                            rewardCount = Double(payout.total)
                         }
-                        .buttonStyle(SoftRaisedPillStyle(height: 48))
+                        #if os(iOS)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        #endif
+                    }
 
+                    // Continue / Next
+                    let hasNext = levels.hasNextLevel(for: world)
+
+                    if hasNext {
+                        HStack(spacing: 10) {
+                            Button {
+                                levels.advance(from: world)
+                                showWin = false
+                                rewardCount = 0
+                                startNewSession()
+                            } label: {
+                                Text("Continue").font(.headline).frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(SoftRaisedPillStyle(height: 48))
+                        }
+                    } else {
                         Button {
-                            _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
-                            levels.advance(from: world)
-                            showWin = false
-                            startNewSession()
+                            dismiss()
                         } label: {
                             Text("Continue").font(.headline).frame(maxWidth: .infinity)
                         }
                         .buttonStyle(SoftRaisedPillStyle(height: 48))
                     }
-                } else {
-                    Button {
-                        _ = levels.awardCoinsIfAllowed(gp.total, in: world, markTutorialCompletedIfFinal: !hasNext && world.isTutorial)
-                        // Mark tutorial complete AFTER awarding on the first full clear
-                        if world.isTutorial {
-                            levels.markTutorialCompleted()
-                        }
-                        dismiss()
-                    } label: {
-                        Text("Continue").font(.headline).frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(SoftRaisedPillStyle(height: 48))
                 }
+                .padding(20)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 24)
+                .transition(.scale.combined(with: .opacity))
             }
-            .padding(20)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 24)
-            .transition(.scale.combined(with: .opacity))
+            .onDisappear {
+                rewardCount = 0
+            }
         }
     }
 
 
+
     // MARK: - Helpers
+
+    private struct FreezeAnimations: ViewModifier {
+        let active: Bool
+        func body(content: Content) -> some View {
+            content.transaction { tx in
+                if active { tx.animation = nil }   // disable implicit animations locally
+            }
+        }
+    }
 
     private func buyRevealBoost(cost: Int, count: Int = 1) {
         if levels.coins >= cost {
@@ -308,22 +345,35 @@ struct LevelPlayView: View {
         par      = levels.levelPar(for: world, levelIndex: idx)
         let seed = levels.seed(for: world, levelIndex: idx)
 
-        game.startLevelSession(seed: seed, dictionaryID: world.dictionaryID)
-
+        // Reset view flags
         showWin = false
         didAwardCoins = false
         bannerWasShown = false
         showWorldBanner = false
         pendingWinDelay = false
+
+        // Show loading, yield a frame so the overlay is visible, then build
+        isGenerating = true
+        Task {
+            // Let SwiftUI render the overlay before the heavy work
+            await Task.yield()
+
+            // Start (your method is @MainActor; that's fine — we just yielded first)
+            game.startLevelSession(seed: seed, dictionaryID: world.dictionaryID)
+
+            isGenerating = false
+        }
     }
 
-//    private func awardCoinsOnce(_ amount: Int) {
-//        guard !didAwardCoins else { return }
-//        didAwardCoins = true
-//        if amount > 0 {
-//            levels.addCoins(amount)
-//        }
-//    }
+
+    private func awardCoinsOnce(_ amount: Int) {
+        guard !didAwardCoins else { return }
+        didAwardCoins = true
+        if amount > 0 {
+            levels.addCoins(amount)
+        }
+        
+    }
 
     /// Left → center (show), hold ~2s, right (hide)
     private func triggerWorldBanner() {
@@ -384,105 +434,110 @@ struct LevelPlayView: View {
     }
 }
 
-// MARK: - Particle Aura (unchanged from your file)
-private struct ParticleAura: View {
-    var padding: CGFloat = 10
-    var count: Int = 12
-    var speed: Double = 0.6
-    var size: CGFloat = 2.2
-    var tailScale1: CGFloat = 0.73
-    var tailScale2: CGFloat = 0.50
-    var tint: Color = .white
-    var blendNormal: Bool = true
-    var wiggle: CGFloat = 1.0
-    var radialJitter: CGFloat = 12
-    var speedJitter: Double = 0.25
+//// MARK: - Particle Aura (radial burst, speed-governed wobble)
+//private struct ParticleAura: View {
+//    // Same public knobs so existing call sites keep working
+//    var padding: CGFloat = 1            // distance from edges
+//    var count: Int = 12                  // number of particles
+//    var speed: Double = 1.25              // global time scale (lower = slower)
+//    var size: CGFloat = 10.0              // core dot radius
+//    var tailScale1: CGFloat = 0.73       // first trail size factor
+//    var tailScale2: CGFloat = 0.50       // second trail size factor
+//    var tint: Color = .white
+//    var blendNormal: Bool = true         // false → additive glow
+//    var wiggle: CGFloat = 1.0            // radial wobble amplitude (px)
+//    var radialJitter: CGFloat = 12       // angle jitter (degrees)
+//    var speedJitter: Double = 1.80       // per-particle speed variance
+//
+//    @State private var params: [Param] = []
+//
+//    private struct Param {
+//        let angle: Double        // base direction (radians)
+//        let phase0: Double       // initial progress offset (0..1)
+//        let speedMul: Double     // speed multiplier
+//        let wobblePhase: Double  // wobble phase
+//        let wobbleFreq: Double   // wobble frequency (Hz-ish)
+//        let wobbleAmp: Double    // wobble amplitude (px)
+//    }
+//
+//    private func makeParams(_ n: Int) -> [Param] {
+//        (0..<n).map { i in
+//            let baseAngle = Double(i) * (2 * .pi) / Double(max(1, n))
+//            let jitterRad = Double(radialJitter) * (.pi / 180)
+//            let jitter    = Double.random(in: -jitterRad...jitterRad)
+//            return Param(
+//                angle: baseAngle + jitter,
+//                phase0: Double.random(in: 0..<1),
+//                speedMul: Double.random(in: (1.0 - speedJitter)...(1.0 + speedJitter)),
+//                wobblePhase: Double.random(in: 0..<(2 * .pi)),
+//                wobbleFreq: Double.random(in: 0.8...1.4),
+//                wobbleAmp: Double.random(in: 0.10...0.35) * Double(max(0, wiggle))
+//            )
+//        }
+//    }
+//
+//    var body: some View {
+//        GeometryReader { geo in
+//            let w = geo.size.width, h = geo.size.height
+//            let cx = w / 2, cy = h / 2
+//            let maxR = max(0, min(w, h) / 2 - padding)
+//            let edgeGuard = max(size * 1.5, 2)
+//
+//            TimelineView(.periodic(from: Date(), by: 1.0 / 60.0)) { tl in
+//                let t = tl.date.timeIntervalSinceReferenceDate
+//                let tScaled = t * max(0.0001, speed)   // one timebase that obeys `speed`
+//
+//                Canvas { ctx, _ in
+//                    ctx.blendMode = blendNormal ? .normal : .plusLighter
+//
+//                    let ps = (params.count == count) ? params : makeParams(count)
+//
+//                    for i in 0..<ps.count {
+//                        let p = ps[i]
+//
+//                        // Outward progress 0→1 (looping), eased for a soft bloom
+//                        let prog  = ((tScaled * p.speedMul + p.phase0).truncatingRemainder(dividingBy: 1))
+//                        let eased = 1 - pow(1 - prog, 1.6)
+//
+//                        // Radial wobble uses the SAME scaled timebase
+//                        let wobble = sin(tScaled * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp
+//                        let r = max(0, min(maxR - edgeGuard, eased * maxR + wobble))
+//
+//                        let x = cx + CGFloat(cos(p.angle)) * CGFloat(r)
+//                        let y = cy + CGFloat(sin(p.angle)) * CGFloat(r)
+//
+//                        // Core dot
+//                        let coreR: CGFloat = size
+//                        var core = Path(ellipseIn: CGRect(x: x - coreR, y: y - coreR, width: coreR * 2, height: coreR * 2))
+//                        let alpha = (1 - eased) * 0.9     // fade as it travels out
+//                        ctx.opacity = alpha
+//                        ctx.fill(core, with: .color(tint))
+//
+//                        // Two trailing echoes marching toward center
+//                        func trail(back: Double, scale: CGFloat, mult: Double) {
+//                            let tProg = max(0, eased - back)
+//                            let tr = max(0, min(maxR - edgeGuard, tProg * maxR))
+//                            let tx = cx + CGFloat(cos(p.angle)) * CGFloat(tr)
+//                            let ty = cy + CGFloat(sin(p.angle)) * CGFloat(tr)
+//                            let sr = coreR * scale
+//                            var tail = Path(ellipseIn: CGRect(x: tx - sr, y: ty - sr, width: sr * 2, height: sr * 2))
+//                            ctx.opacity = alpha * mult
+//                            ctx.fill(tail, with: .color(tint))
+//                        }
+//                        trail(back: 0.08, scale: tailScale1, mult: 0.45)
+//                        trail(back: 0.16, scale: tailScale2, mult: 0.25)
+//                    }
+//                }
+//            }
+//        }
+//        .onAppear { if params.count != count { params = makeParams(count) } }
+//        .onChange(of: count) { _, n in params = makeParams(n) }
+//        .allowsHitTesting(false)
+//    }
+//}
 
-    @State private var params: [Param] = []
 
-    private struct Param {
-        let phase0: Double, wobblePhase: Double, wobbleAmp: Double, wobbleFreq: Double
-        let radiusOffset: CGFloat, speedMul: Double
-    }
 
-    private func makeParams(_ n: Int) -> [Param] {
-        (0..<n).map { _ in
-            Param(
-                phase0: Double.random(in: 0..<(2 * .pi)),
-                wobblePhase: Double.random(in: 0..<(2 * .pi)),
-                wobbleAmp: Double.random(in: 0.10...0.35) * Double(max(0, wiggle)),
-                wobbleFreq: Double.random(in: 0.8...1.4),
-                radiusOffset: CGFloat.random(in: -radialJitter...radialJitter),
-                speedMul: Double.random(in: (1.0 - speedJitter)...(1.0 + speedJitter))
-            )
-        }
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-
-            let rxInner = max(0, w / 2 - padding)
-            let ryInner = max(0, h / 2 - padding)
-            let edgeGuard = max(size * 1.5, 2)
-
-            TimelineView(.periodic(from: Date(), by: 1.0 / 60.0)) { tl in
-                let t = tl.date.timeIntervalSinceReferenceDate
-
-                Canvas { ctx, sz in
-                    ctx.blendMode = blendNormal ? .normal : .plusLighter
-
-                    let ps = (params.count == count) ? params :
-                        (0..<count).map { i in
-                            Param(phase0: Double(i) * .pi * 2 / Double(max(1, count)),
-                                  wobblePhase: Double(i) * 0.37,
-                                  wobbleAmp: 0.18 * Double(max(0, wiggle)),
-                                  wobbleFreq: 1.1,
-                                  radiusOffset: 0,
-                                  speedMul: 1.0)
-                        }
-
-                    let cx = sz.width  / 2
-                    let cy = sz.height / 2
-
-                    for i in 0..<count {
-                        let p = ps[i]
-
-                        let base   = t * speed * p.speedMul + Double(i) * .pi * 2 / Double(count) + p.phase0
-                        let wobble = sin(t * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp
-                        let a = base + wobble
-
-                        let rx = max(0, min(rxInner - edgeGuard, rxInner + p.radiusOffset))
-                        let ry = max(0, min(ryInner - edgeGuard, ryInner + p.radiusOffset))
-
-                        let x = cx + cos(a) * rx
-                        let y = cy + sin(a) * ry
-
-                        let r: CGFloat = size
-                        var dot = Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
-                        let flicker = 0.35 + 0.25 * (0.5 + 0.5 * sin(t * 1.2 + Double(i)))
-                        ctx.opacity = flicker
-                        ctx.fill(dot, with: .color(tint))
-
-                        for k in 1...2 {
-                            let trailA = a - Double(k) * 0.12
-                            let tx = cx + cos(trailA) * rx
-                            let ty = cy + sin(trailA) * ry
-                            let sr: CGFloat = (k == 1) ? size * tailScale1 : size * tailScale2
-                            var tail = Path(ellipseIn: CGRect(x: tx - sr, y: ty - sr, width: sr * 2, height: sr * 2))
-                            ctx.opacity = flicker * (k == 1 ? 0.45 : 0.25)
-                            ctx.fill(tail, with: .color(tint))
-                        }
-                    }
-                }
-            }
-        }
-        .onAppear { if params.count != count { params = makeParams(count) } }
-        .onChange(of: count) { _, newCount in params = makeParams(newCount) }
-        .allowsHitTesting(false)
-    }
-}
 
 // MARK: - Banner View
 private struct WorldWordBanner: View {
@@ -538,3 +593,17 @@ private struct WorldWordBanner: View {
             .accessibilityLabel(Text(word))
     }
 }
+
+private struct CountUpLabel: View, Animatable {
+    var value: Double
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+    var body: some View {
+        Text("\(Int(value))")
+            .font(.system(size: 28, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+    }
+}
+

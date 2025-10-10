@@ -84,6 +84,12 @@ public struct Footer: View {
                         badgeCount: nil // we render our own badge so it won't be dimmed
                     )
                     .accessibilityLabel(Text("Open Wallet"))
+                    .background(
+                        GeometryReader { g in
+                            Color.clear.preference(key: WalletTargetKey.self,
+                                                   value: g.frame(in: .global).center)
+                        }
+                    )
                 }
                 .buttonStyle(FooterPillButtonStyle(height: pillHeight))
                 .background(
@@ -232,5 +238,14 @@ fileprivate struct FooterPillButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.85), value: configuration.isPressed)
     }
 }
+
+// MARK: - Wallet target preference
+struct WalletTargetKey: PreferenceKey {
+    static var defaultValue: CGPoint? = nil
+    static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) {
+        value = nextValue() ?? value
+    }
+}
+private extension CGRect { var center: CGPoint { CGPoint(x: midX, y: midY) } }
 
 

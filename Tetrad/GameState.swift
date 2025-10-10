@@ -381,7 +381,7 @@ final class GameState: ObservableObject {
         moveCount = 0
         solved = false
 
-        // Clear world state for a fresh level
+        // Clear world state for a fresh level (UI/runtime flags)
         worldWord = nil
         worldWordIndex = nil
         worldProtectedCoords.removeAll()
@@ -448,6 +448,7 @@ final class GameState: ObservableObject {
         self.solution = solution
         let bag = String(letters) // letters already lowercased characters
         self.identity = PuzzleIdentity(dayUTC: "LEVEL-\(seed)", bag: bag)
+
         buildTiles(from: bag)
 
         // Mark the World Word & protect its row/col
@@ -457,12 +458,102 @@ final class GameState: ObservableObject {
         var coords: Set<BoardCoord> = []
         for c in 0..<4 { coords.insert(.init(row: wIndex, col: c)) }
         for r in 0..<4 { coords.insert(.init(row: r, col: wIndex)) }
-        self.worldProtectedCoords = coords  // ⬅️ IMPORTANT (was commented before)
+        self.worldProtectedCoords = coords
 
+        // ⬇️ Try to RESUME this level from a saved snapshot (if identity matches)
+        if let id = self.identity,
+           var run = Persistence.loadRunState(),
+           run.lastPlayedDayUTC == id.dayUTC {
+
+            // Restore counters
+            self.moveCount = run.moves
+            self.solved    = run.solvedToday
+
+            // Reset board & return all tiles to bag
+            self.board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
+            for i in tiles.indices {
+                var t = tiles[i]
+                t.location = .bag
+                t.hasBeenPlacedOnce = false
+                tiles[i] = t
+            }
+
+            // Re-apply placements (consume matching letters from bag)
+            for p in run.placements {
+                if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
+                    var t = tiles[idx]
+                    t.hasBeenPlacedOnce = true
+                    let bc = BoardCoord(row: p.row, col: p.col)
+                    t.location = .board(bc)
+                    tiles[idx] = t
+                    board[p.row][p.col] = t.id
+                }
+            }
+
+            // Rebuild World-Word locks for correctly placed protected cells
+            self.worldLockedTileIDs.removeAll()
+            for coord in self.worldProtectedCoords {
+                if let t = tile(at: coord), isCorrect(t.letter, at: coord) {
+                    self.worldLockedTileIDs.insert(t.id)
+                }
+            }
+            checkWorldWordComplete()
+
+            persistProgressSnapshot() // keep snapshot consistent
+            return
+        }
+
+        // Fresh start (no snapshot found)
         persistProgressSnapshot()
     }
 
+
     // MARK: - Persistence snapshots
+    
+    @MainActor
+    private func restoreLevelSnapshotIfAvailable() -> Bool {
+        guard let id = identity else { return false }
+        guard var run = Persistence.loadRunState(),
+              run.lastPlayedDayUTC == id.dayUTC else { return false }
+
+        // Restore counters/flags
+        moveCount = run.moves
+        solved    = run.solvedToday
+
+        // Reset board & return all tiles to the bag
+        board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
+        for i in tiles.indices {
+            var t = tiles[i]
+            t.location = .bag
+            t.hasBeenPlacedOnce = false
+            tiles[i] = t
+        }
+
+        // Re-apply placements (match by letter from bag pool)
+        for p in run.placements {
+            if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
+                var t = tiles[idx]
+                t.hasBeenPlacedOnce = true
+                let bc = BoardCoord(row: p.row, col: p.col)
+                t.location = .board(bc)
+                tiles[idx] = t
+                board[p.row][p.col] = t.id
+            }
+        }
+
+        // Rebuild World-Word locks for correctly placed protected cells
+        worldLockedTileIDs.removeAll()
+        for coord in worldProtectedCoords {
+            if let t = tile(at: coord), isCorrect(t.letter, at: coord) {
+                worldLockedTileIDs.insert(t.id)
+            }
+        }
+        // Re-evaluate completion flag
+        checkWorldWordComplete()
+
+        return true
+    }
+    
     private func persistProgressSnapshot() {
         guard let id = identity else { return }
         var placements: [TilePlacement] = []
@@ -495,6 +586,7 @@ final class GameState: ObservableObject {
         persistProgressSnapshot()
     }
 }
+
 
 // MARK: - Smart Boost (auto, non-adjacent preference, avoids World Word cells)
 extension GameState {
