@@ -52,6 +52,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
+            Color.softSandSat.ignoresSafeArea()
             VStack(spacing: 16) {
                 header
                 boardView
@@ -98,18 +99,26 @@ struct ContentView: View {
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
 
-        .navigationBarTitleDisplayMode(.inline)   // keep everything on one compact row
         .toolbar {
-            if showHeader {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { dismiss() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left").imageScale(.medium)
+                        Text("Back")
+                    }
+                }
+                .buttonStyle(SoftRaisedPillStyle(height: 36))
+            }
+            
+            if showHeader && enableDailyWinUI {
                 ToolbarItem(placement: .principal) {
                     Text("TETRAD")
-                        .font(.system(size: 44, weight: .heavy, design: .rounded))
-                        .tracking(3)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .offset(x: 0)
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .tracking(1.5)
                 }
             }
         }
+        .navigationBarBackButtonHidden(true)
 
         // Daily bootstrap stays gated by skipDailyBootstrap
         .onAppear {
@@ -554,11 +563,20 @@ struct ContentView: View {
             let origin = cellGeo.frame(in: .named("stage")).origin
 
             ZStack {
-                // background cell
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.clear)
-                    .softRaised(corner: 12)   // 👈 subtle beveled tile well
-
+                    .fill(Color.softSandSat)
+                    .softRaised(corner: 12) // keep the bevel
+                    // ↑ add contrasty border(s):
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.black.opacity(0.22), lineWidth: 1) // darker outer ring
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .inset(by: 0.5)
+                            .stroke(Color.white.opacity(0.55), lineWidth: 0.5) // subtle inner highlight
+                            .blendMode(.overlay)
+                    )
 
                 if let tile = game.tile(at: coord) {
                     tileView(

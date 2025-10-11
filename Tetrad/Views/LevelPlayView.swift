@@ -30,6 +30,8 @@ struct LevelPlayView: View {
     // MARK: - Main Body
     var body: some View {
         ZStack {
+            Color.softSandSat.ignoresSafeArea()   // ← back layer
+
             boardLayer
                 .modifier(FreezeAnimations(active: showWorldBanner)) // <- board never shifts
 
@@ -152,10 +154,11 @@ struct LevelPlayView: View {
 
     @ViewBuilder private var boardLayer: some View {
         ContentView(
-            skipDailyBootstrap: true, enableDailyWinUI: false,
-            showHeader: false    // ← hides the "TETRAD" title inside Level Play
-
+            skipDailyBootstrap: true,
+            enableDailyWinUI: false,
+            showHeader: false
         )
+
     }
 
     @ViewBuilder
@@ -197,16 +200,6 @@ struct LevelPlayView: View {
     }
 
     @ToolbarContentBuilder private var levelToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button { dismiss() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "chevron.left").imageScale(.medium)
-                    Text("Back")
-                }
-                .foregroundStyle(.primary)
-            }
-            .buttonStyle(SoftRaisedPillStyle(height: 36))
-        }
 
         ToolbarItem(placement: .navigationBarTrailing) {
             Text("\(world.name) | L\(levels.levelIndex(for: world) + 1)")
@@ -215,15 +208,6 @@ struct LevelPlayView: View {
                 .tracking(1.5)
         }
 
-//        ToolbarItem(placement: .navigationBarTrailing) {
-//            HStack(spacing: 6) {
-//                Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-//                Text("\(levels.coins)")
-//                    .font(.headline)
-//                    .monospacedDigit()
-//            }
-//            .softRaisedCapsule()
-//        }
     }
 
     @ViewBuilder private var winOverlay: some View {
@@ -434,111 +418,6 @@ struct LevelPlayView: View {
     }
 }
 
-//// MARK: - Particle Aura (radial burst, speed-governed wobble)
-//private struct ParticleAura: View {
-//    // Same public knobs so existing call sites keep working
-//    var padding: CGFloat = 1            // distance from edges
-//    var count: Int = 12                  // number of particles
-//    var speed: Double = 1.25              // global time scale (lower = slower)
-//    var size: CGFloat = 10.0              // core dot radius
-//    var tailScale1: CGFloat = 0.73       // first trail size factor
-//    var tailScale2: CGFloat = 0.50       // second trail size factor
-//    var tint: Color = .white
-//    var blendNormal: Bool = true         // false → additive glow
-//    var wiggle: CGFloat = 1.0            // radial wobble amplitude (px)
-//    var radialJitter: CGFloat = 12       // angle jitter (degrees)
-//    var speedJitter: Double = 1.80       // per-particle speed variance
-//
-//    @State private var params: [Param] = []
-//
-//    private struct Param {
-//        let angle: Double        // base direction (radians)
-//        let phase0: Double       // initial progress offset (0..1)
-//        let speedMul: Double     // speed multiplier
-//        let wobblePhase: Double  // wobble phase
-//        let wobbleFreq: Double   // wobble frequency (Hz-ish)
-//        let wobbleAmp: Double    // wobble amplitude (px)
-//    }
-//
-//    private func makeParams(_ n: Int) -> [Param] {
-//        (0..<n).map { i in
-//            let baseAngle = Double(i) * (2 * .pi) / Double(max(1, n))
-//            let jitterRad = Double(radialJitter) * (.pi / 180)
-//            let jitter    = Double.random(in: -jitterRad...jitterRad)
-//            return Param(
-//                angle: baseAngle + jitter,
-//                phase0: Double.random(in: 0..<1),
-//                speedMul: Double.random(in: (1.0 - speedJitter)...(1.0 + speedJitter)),
-//                wobblePhase: Double.random(in: 0..<(2 * .pi)),
-//                wobbleFreq: Double.random(in: 0.8...1.4),
-//                wobbleAmp: Double.random(in: 0.10...0.35) * Double(max(0, wiggle))
-//            )
-//        }
-//    }
-//
-//    var body: some View {
-//        GeometryReader { geo in
-//            let w = geo.size.width, h = geo.size.height
-//            let cx = w / 2, cy = h / 2
-//            let maxR = max(0, min(w, h) / 2 - padding)
-//            let edgeGuard = max(size * 1.5, 2)
-//
-//            TimelineView(.periodic(from: Date(), by: 1.0 / 60.0)) { tl in
-//                let t = tl.date.timeIntervalSinceReferenceDate
-//                let tScaled = t * max(0.0001, speed)   // one timebase that obeys `speed`
-//
-//                Canvas { ctx, _ in
-//                    ctx.blendMode = blendNormal ? .normal : .plusLighter
-//
-//                    let ps = (params.count == count) ? params : makeParams(count)
-//
-//                    for i in 0..<ps.count {
-//                        let p = ps[i]
-//
-//                        // Outward progress 0→1 (looping), eased for a soft bloom
-//                        let prog  = ((tScaled * p.speedMul + p.phase0).truncatingRemainder(dividingBy: 1))
-//                        let eased = 1 - pow(1 - prog, 1.6)
-//
-//                        // Radial wobble uses the SAME scaled timebase
-//                        let wobble = sin(tScaled * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp
-//                        let r = max(0, min(maxR - edgeGuard, eased * maxR + wobble))
-//
-//                        let x = cx + CGFloat(cos(p.angle)) * CGFloat(r)
-//                        let y = cy + CGFloat(sin(p.angle)) * CGFloat(r)
-//
-//                        // Core dot
-//                        let coreR: CGFloat = size
-//                        var core = Path(ellipseIn: CGRect(x: x - coreR, y: y - coreR, width: coreR * 2, height: coreR * 2))
-//                        let alpha = (1 - eased) * 0.9     // fade as it travels out
-//                        ctx.opacity = alpha
-//                        ctx.fill(core, with: .color(tint))
-//
-//                        // Two trailing echoes marching toward center
-//                        func trail(back: Double, scale: CGFloat, mult: Double) {
-//                            let tProg = max(0, eased - back)
-//                            let tr = max(0, min(maxR - edgeGuard, tProg * maxR))
-//                            let tx = cx + CGFloat(cos(p.angle)) * CGFloat(tr)
-//                            let ty = cy + CGFloat(sin(p.angle)) * CGFloat(tr)
-//                            let sr = coreR * scale
-//                            var tail = Path(ellipseIn: CGRect(x: tx - sr, y: ty - sr, width: sr * 2, height: sr * 2))
-//                            ctx.opacity = alpha * mult
-//                            ctx.fill(tail, with: .color(tint))
-//                        }
-//                        trail(back: 0.08, scale: tailScale1, mult: 0.45)
-//                        trail(back: 0.16, scale: tailScale2, mult: 0.25)
-//                    }
-//                }
-//            }
-//        }
-//        .onAppear { if params.count != count { params = makeParams(count) } }
-//        .onChange(of: count) { _, n in params = makeParams(n) }
-//        .allowsHitTesting(false)
-//    }
-//}
-
-
-
-
 // MARK: - Banner View
 private struct WorldWordBanner: View {
     let word: String
@@ -554,45 +433,55 @@ private struct WorldWordBanner: View {
             .lineLimit(1)
             .minimumScaleFactor(0.8)
 
-        label
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(gradient)
-                    .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                    .shadow(radius: 10, x: 0, y: 6)
-            )
-            .fixedSize(horizontal: true, vertical: true)
-            .overlay {
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    let h = geo.size.height
-                    let band = max(56, w * 0.35)
+        VStack(spacing: 8) {
+            // Fixed heading
+            Text("World Word Found!")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundStyle(.black)
+                .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
+                .accessibilityHidden(true)
 
+            label
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.0), .white.opacity(0.28), .white.opacity(0.0)],
-                                startPoint: .leading, endPoint: .trailing
+                        .fill(gradient)
+                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                        .shadow(radius: 10, x: 0, y: 6)
+                )
+                .fixedSize(horizontal: true, vertical: true)
+                .overlay {
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        let h = geo.size.height
+                        let band = max(56, w * 0.35)
+
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.0), .white.opacity(0.28), .white.opacity(0.0)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
                             )
-                        )
-                        .frame(width: band, height: h + 8)
-                        .rotationEffect(.degrees(24))
-                        .offset(x: runSheen ? w + band : -band)
-                        .allowsHitTesting(false)
-                        .onAppear {
-                            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-                                runSheen = true
+                            .frame(width: band, height: h + 8)
+                            .rotationEffect(.degrees(24))
+                            .offset(x: runSheen ? w + band : -band)
+                            .allowsHitTesting(false)
+                            .onAppear {
+                                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                                    runSheen = true
+                                }
                             }
-                        }
+                    }
+                    .clipShape(Capsule())
                 }
-                .clipShape(Capsule())
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(word))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(word))
+        }
     }
 }
+
 
 private struct CountUpLabel: View, Animatable {
     var value: Double

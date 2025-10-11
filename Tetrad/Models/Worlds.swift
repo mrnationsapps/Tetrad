@@ -21,63 +21,63 @@ enum WorldsCatalog {
     static let all: [World] = [
         World(id: "tutorial",
               name: "Tutorial",
-              artName: "WorldCard_Tutorial",
+              artName: "Tutorial",
               unlockCost: 0,
               dictionaryID: "Adjectives_Dictionary",   // or your own tutorial list
               isTutorial: true),
 
         World(id: "food",
               name: "Food",
-              artName: "WorldCard_Food",
+              artName: "Food",
               unlockCost: 6,
               dictionaryID: "Food_Drink_Dictionary",
               isTutorial: false),
 
         World(id: "animals",
               name: "Animals",
-              artName: "WorldCard_Animals",
+              artName: "Animals",
               unlockCost: 12,
               dictionaryID: "Animals_Dictionary",
               isTutorial: false),
 
         World(id: "nature",
               name: "Nature",
-              artName: "WorldCard_Nature",
+              artName: "Nature",
               unlockCost: 12,
               dictionaryID: "Plants_Dictionary",       // ← matches your file list
               isTutorial: false),
 
         World(id: "holidays",
               name: "Holidays",
-              artName: "WorldCard_Holidays",
+              artName: "Holiday",
               unlockCost: 14,
               dictionaryID: "Places_Dictionary",       // temp until you add Holidays_Dictionary.txt
               isTutorial: false),
 
         World(id: "retro",
               name: "Retro",
-              artName: "WorldCard_Retro",
+              artName: "Retro",
               unlockCost: 14,
               dictionaryID: "Adjectives_Dictionary",   // pick a file to use for now
               isTutorial: false),
 
         World(id: "travel",
-              name: "Travel",
-              artName: "WorldCard_Travel",
+              name: "Places",
+              artName: "Places",
               unlockCost: 16,
               dictionaryID: "Places_Dictionary",
               isTutorial: false),
 
         World(id: "history",
               name: "History",
-              artName: "WorldCard_History",
+              artName: "History",
               unlockCost: 16,
               dictionaryID: "History_Dictionary",
               isTutorial: false),
 
         World(id: "entertainment",
               name: "Entertainment",
-              artName: "WorldCard_Entertainment",
+              artName: "Entertainment",
               unlockCost: 18,
               dictionaryID: "Arts_Entertainment_Dictionary",
               isTutorial: false)

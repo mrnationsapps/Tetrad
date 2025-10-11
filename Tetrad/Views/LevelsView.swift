@@ -31,6 +31,8 @@ struct LevelsView: View {
 
         // MAIN LAYOUT
         let main = ZStack {
+            Color.softSandSat.ignoresSafeArea()   // ← back layer
+
             // content
             VStack(spacing: 16) {
                 header
@@ -112,12 +114,11 @@ struct LevelsView: View {
 
     // MARK: World list (3 rows, horizontal scroll)
     private var worldList: some View {
-        let cardSize = CGSize(width: 150, height: 194)
+        let cardSize = CGSize(width: 175, height: 262)
         let rowSpacing: CGFloat = 8
         let rows: [GridItem] = [
             GridItem(.fixed(cardSize.height), spacing: rowSpacing, alignment: .top),
             GridItem(.fixed(cardSize.height), spacing: rowSpacing, alignment: .top),
-            GridItem(.fixed(cardSize.height), spacing: rowSpacing, alignment: .top)
         ]
 
         return VStack(alignment: .leading, spacing: 8) {
@@ -167,7 +168,7 @@ struct LevelsView: View {
                         }
                     }
                 }
-                .frame(height: (cardSize.height * 3) + (rowSpacing * 2))
+                .frame(height: (cardSize.height * 2) + (rowSpacing * 2))
                 .padding(.vertical, 8)
                 .zIndex(1) // keep the grid above any decorative overlays
             }

@@ -126,7 +126,8 @@ struct TutorialWorldView: View {
                     CalloutCard {
                         Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.92)) // was .secondary
+
                     }
                     .frame(maxWidth: 420)
                     .padding(.trailing, 0)
@@ -255,7 +256,7 @@ struct TutorialWorldView: View {
 private func numberedStep(_ n: Int, _ text: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(text)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white.opacity(0.92)) // was .secondary
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
             .padding(10)
@@ -268,11 +269,19 @@ private struct CalloutCard<Content: View>: View {
     var body: some View {
         content
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.softSage.opacity(1.0))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.white, lineWidth: 1)   // ← white stroke
+            )
             .shadow(radius: 6, x: 0, y: 2)
             .padding(.horizontal, 20)
             .offset(y: 20)
     }
+
 }
 
 private struct IntroLesson: View {

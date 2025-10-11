@@ -10,9 +10,22 @@
 		7CA7C81A2E84F4340059B5A8 /* Tetrad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tetrad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7CF4BF3D2E9A143200540F3A /* Exceptions for "Tetrad" folder in "Tetrad" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Untitled.swift,
+			);
+			target = 7CA7C8192E84F4340059B5A8 /* Tetrad */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7CA7C81C2E84F4340059B5A8 /* Tetrad */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7CF4BF3D2E9A143200540F3A /* Exceptions for "Tetrad" folder in "Tetrad" target */,
+			);
 			path = Tetrad;
 			sourceTree = "<group>";
 		};

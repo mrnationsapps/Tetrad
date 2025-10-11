@@ -9,52 +9,61 @@ struct IntroView: View {
 
     var body: some View {
         NavigationStack {
-            // CONTENT (header + achievements that fills space)
-            VStack(spacing: 20) {
-                // HEADER (fixed)
-                VStack(spacing: 8) {
-                    Text("TETRAD")
-                        .font(.system(size: 44, weight: .heavy, design: .rounded))
-                        .tracking(3)
+            
+            ZStack{
+                Color.softSandSat.ignoresSafeArea()
 
-                    Text("Make 4 four-letter words, daily.")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 28)
-
-                // ACHIEVEMENTS (only this scrolls; expands to available space)
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Achievements Unlocked!")
-                            .font(.title3).bold()
-                        Spacer()
-                        Text("\(unlockedCount())/\(achievements.count)")
-                            .font(.subheadline)
+                // CONTENT (header + achievements that fills space)
+                VStack(spacing: 20) {
+                    
+                    // HEADER (fixed)
+                    VStack(spacing: 8) {
+                        Text("TETRAD")
+                            .font(.system(size: 44, weight: .heavy, design: .rounded))
+                            .tracking(3)
+                        
+                        Text("Make 4 four-letter words, daily.")
+                            .font(.headline)
                             .foregroundStyle(.secondary)
                     }
-
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(achievements) { ach in
-                                AchievementRow(
-                                    achievement: ach,
-                                    isUnlocked: ach.isUnlocked(using: game)
-                                )
-                            }
+                    .padding(.top, 28)
+                    
+                    // ACHIEVEMENTS (only this scrolls; expands to available space)
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Achievements Unlocked!")
+                                .font(.title3).bold()
+                            Spacer()
+                            Text("\(unlockedCount())/\(achievements.count)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(12)
+
+                        // ScrollView padded as a unit so background hugs it
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(achievements) { ach in
+                                    AchievementRow(
+                                        achievement: ach,
+                                        isUnlocked: ach.isUnlocked(using: game)
+                                    )
+                                }
+                            }
+                            .padding(.bottom, 12) // space after last row
+                        }
+                        .padding(12) // <— move padding outside content
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.softgreen)
+                                .softRaised(corner: 16)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16)) // keep scrollers/ink inside
+                        .frame(maxHeight: .infinity, alignment: .top)
                     }
-                    // Soft Raised container instead of thinMaterial
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.clear)
-                            .softRaised(corner: 16)
-                    )
-                    .frame(maxHeight: .infinity, alignment: .top) // fills remaining space
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
             }
+
             // Bottom CTAs pinned to safe area
 
             .safeAreaInset(edge: .bottom) {
@@ -88,7 +97,7 @@ struct IntroView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
-                .background(.ultraThinMaterial)
+                .background(Color.softSandSat.opacity(0.7))
             }
 
             .navigationDestination(isPresented: $navigateToGame) {
@@ -118,7 +127,7 @@ private struct AchievementRow: View {
             // Icon tile (soft raised 44x44)
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.clear)
+                    .fill(Color.softSandSat)
                     .frame(width: 44, height: 44)
                     .softRaised(corner: 10)
 
@@ -151,7 +160,7 @@ private struct AchievementRow: View {
         // Soft Raised card background (corner 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.clear)
+                .fill(Color.softSandBright)
                 .softRaised(corner: 12)
         )
         // Keep the locked ones a bit subdued

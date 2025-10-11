@@ -110,3 +110,37 @@ extension View {
         modifier(SoftRaisedCapsule(pressed: pressed))
     }
 }
+
+extension Color {
+    static let beige     = Color(red: 0.96, green: 0.96, blue: 0.86) // #F5F5DC classic beige
+    static let sand      = Color(red: 0.94, green: 0.89, blue: 0.78) // #F0E3C7
+    static let cream     = Color(red: 1.00, green: 0.97, blue: 0.90) // #FFF7E6
+    static let parchment = Color(red: 0.98, green: 0.93, blue: 0.83) // #FAEED4
+    static let darkparchment = Color(red: 0.588, green: 0.558, blue: 0.498) // #968E7F
+    static let warmCanvas = Color(red: 0.961, green: 0.941, blue: 0.902) // #F5F0E6
+    static let softSand   = Color(red: 0.937, green: 0.906, blue: 0.855) // #EFE7DA
+    static let creamMist  = Color(red: 0.969, green: 0.953, blue: 0.925) // #F7F3EC
+    static let warmCanvasSat = Color(red: 0.965, green: 0.918, blue: 0.847) // #F6EAD8
+    static let creamMistSat  = Color(red: 0.976, green: 0.941, blue: 0.886) // #F9F0E2
+
+    static let softSandSat   = Color(red: 0.941, green: 0.882, blue: 0.788) // #F0E1C9
+    static let softSandBright = Color(red: 1.000, green: 0.973, blue: 0.925) // #FFF8EC
+    static let softgreen = Color(red: 0.514, green: 0.612, blue: 0.588) // #839C96
+    static let softSage = Color(red: 0.686, green: 0.741, blue: 0.729) // #AFBDBA
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+}

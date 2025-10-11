@@ -97,7 +97,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 	}
 
 	// tweak if your real board uses different values
-	private let refGap: CGFloat = 8
+	private let refGap: CGFloat = 1
 	private let minCell: CGFloat = 36
 	private let maxCell: CGFloat = 120
 	private let horizontalPadding: CGFloat = 16
@@ -128,6 +128,9 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 
 	var body: some View {
 		ZStack {
+			// Background
+			Color.softSandSat.ignoresSafeArea()
+
 			VStack(spacing: 0) {
 				// HUD (top-right)
 				HStack {
@@ -302,7 +305,6 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 				.padding(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 0))
-
 			}
 			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -341,7 +343,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 			default: rows = []
 			}
 			model.order = rows.count   // 👈 extra safety (matches L2=3)
-			loadFixed(rows)          // seeds board + bag + solution
+			loadFixed(rows)            // seeds board + bag + solution
 
 			// Initialize the one-line helper flow for Level 1
 			if order == 2 && showHelpers {
@@ -357,16 +359,17 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 			withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
 				model.revealOne()
 			}
-						
+
 			if isSolvedFixed() {
 				DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onWin() }
 			}
-						
+
 			if order == 2 && showHelpers {
 				l1Step = .done
 			}
 		}
 	}
+
 
 	// Keep helpers at struct scope
 	private func clamp(_ v: CGFloat, min lo: CGFloat, max hi: CGFloat) -> CGFloat {
@@ -576,8 +579,8 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 		var body: some View {
 			let boardSize = cell * CGFloat(order) + gap * CGFloat(order - 1)
 			let cols = Array(repeating: GridItem(.fixed(cell), spacing: gap), count: order)
-
 			let ready = model.board.count == order && model.board.allSatisfy { $0.count == order }
+			let corner: CGFloat = 12
 
 			LazyVGrid(columns: cols, spacing: gap) {
 				ForEach(0..<(order * order), id: \.self) { i in
@@ -586,92 +589,144 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 					let chOpt = safeChar(r, c)
 					let isLocked = ready && model.locked.contains(.init(r: r, c: c))
 
-					TileCell(char: chOpt, locked: isLocked, side: cell)
-						.contentShape(Rectangle())
+					// ⬇️ Styled cell well + your tile content on top
+					ZStack {
+						// Board well (always visible)
+						RoundedRectangle(cornerRadius: corner)
+							.fill(Color.softSandSat)
+							.softRaised(corner: corner)
+							.overlay(
+								RoundedRectangle(cornerRadius: corner)
+									.stroke(Color.black.opacity(0.22), lineWidth: 1)
+							)
+							.overlay(
+								RoundedRectangle(cornerRadius: corner)
+									.inset(by: 0.5)
+									.stroke(Color.white.opacity(0.55), lineWidth: 0.5)
+									.blendMode(.overlay)
+							)
 
-						// tap to clear (no move cost)
-						.onTapGesture {
-							guard ready, model.board[r][c] != nil else { return }
-							model.board[r][c] = nil
-							onAnyMove(false) // not a scoring move
-						}
+						// Inner TILE only when there’s a letter
+						if let ch = chOpt {
+							let tileCorner: CGFloat = 12
 
-						// typed drop from bag — NO move cost
-						.dropDestination(for: String.self) { items, _ in
-							guard ready, let s = items.first, let ch = s.first else { return false }
-							let prevMoves = model.moves
-							let placed = model.place(ch, at: .init(r: r, c: c))
-							if placed { model.moves = prevMoves }     // neutralize any move increment
-							onAnyMove(placed)
-							return placed
-						}
+							ZStack {
+								// White tile (or green when locked)
+								RoundedRectangle(cornerRadius: tileCorner)
+									.fill(isLocked ? Color.green : Color(.systemBackground)) // ← white tile
+									.overlay(
+										RoundedRectangle(cornerRadius: tileCorner)
+											.stroke(isLocked ? Color.green.opacity(0.85)
+															 : Color.black.opacity(0.22),
+													lineWidth: 1)
+									)
+									.overlay(
+										RoundedRectangle(cornerRadius: tileCorner)
+											.inset(by: 0.5)
+											.stroke(Color.white.opacity(0.55), lineWidth: 0.5)
+											.blendMode(.overlay)
+									)
 
-						// legacy fallback (.onDrop) — NO move cost
-						.onDrop(of: [.utf8PlainText, .plainText], isTargeted: nil) { providers in
-							guard ready, let item = providers.first else { return false }
-							_ = item.loadObject(ofClass: NSString.self) { reading, _ in
-								guard let ns = reading as? NSString,
-									  let ch = (ns as String).first else { return }
-								DispatchQueue.main.async {
-									let prevMoves = model.moves
-									let placed = model.place(ch, at: .init(r: r, c: c))
-									if placed { model.moves = prevMoves }
-									onAnyMove(placed)
-								}
+								// Letter
+								Text(String(ch).uppercased())
+									.font(.system(size: cell * 0.55, weight: .heavy))
+									.foregroundStyle(isLocked ? Color.black : .primary)
+									.minimumScaleFactor(0.8)
 							}
-							return true
+							.frame(width: cell, height: cell)
+							.shadow(radius: 1, x: 0, y: 1)
+							.contentShape(Rectangle())
 						}
+					}
+					.frame(width: cell, height: cell)
+					.contentShape(Rectangle())
 
-						// 🚀 Immediate drag FROM board tile
-						.gesture(
-							DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
-								.onChanged { v in
-									guard let ch = chOpt, ready, !isLocked else { return }
-									onBoardDragBegan?(ch, v.location)
-									onBoardDragChanged?(v.location)
+					.frame(width: cell, height: cell)
+					.contentShape(Rectangle())   // so taps/drags hit even in empty areas
+
+					// tap to clear (no move cost)
+					.onTapGesture {
+						guard ready, model.board[r][c] != nil else { return }
+						model.board[r][c] = nil
+						onAnyMove(false) // not a scoring move
+					}
+
+					// typed drop from bag — NO move cost
+					.dropDestination(for: String.self) { items, _ in
+						guard ready, let s = items.first, let ch = s.first else { return false }
+						let prevMoves = model.moves
+						let placed = model.place(ch, at: .init(r: r, c: c))
+						if placed { model.moves = prevMoves }     // neutralize any move increment
+						onAnyMove(placed)
+						return placed
+					}
+
+					// legacy fallback (.onDrop) — NO move cost
+					.onDrop(of: [.utf8PlainText, .plainText], isTargeted: nil) { providers in
+						guard ready, let item = providers.first else { return false }
+						_ = item.loadObject(ofClass: NSString.self) { reading, _ in
+							guard let ns = reading as? NSString,
+								  let ch = (ns as String).first else { return }
+							DispatchQueue.main.async {
+								let prevMoves = model.moves
+								let placed = model.place(ch, at: .init(r: r, c: c))
+								if placed { model.moves = prevMoves }
+								onAnyMove(placed)
+							}
+						}
+						return true
+					}
+
+					// 🚀 Immediate drag FROM board tile
+					.gesture(
+						DragGesture(minimumDistance: 0, coordinateSpace: .named("stage"))
+							.onChanged { v in
+								guard let ch = chOpt, ready, !isLocked else { return }
+								onBoardDragBegan?(ch, v.location)
+								onBoardDragChanged?(v.location)
+							}
+							.onEnded { v in
+								guard let ch = chOpt, ready, !isLocked else { return }
+								onBoardDragEnded?(ch, v.location)
+
+								// 1) Drop over bag? → return to bag (NO move cost)
+								if let bagRect = bagRectInStage, bagRect.contains(v.location) {
+									model.board[r][c] = nil
+									model.bag.append(ch)
+									onAnyMove(false)
+									return
 								}
-								.onEnded { v in
-									guard let ch = chOpt, ready, !isLocked else { return }
-									onBoardDragEnded?(ch, v.location)
 
-									// 1) Drop over bag? → return to bag (NO move cost)
-									if let bagRect = bagRectInStage, bagRect.contains(v.location) {
-										model.board[r][c] = nil
-										model.bag.append(ch)
-										onAnyMove(false)
-										return
-									}
+								// 2) Drop over board? → move/swap (COSTS 1 MOVE)
+								guard let rect = boardRectInStage, rect.contains(v.location) else { return }
+								let step = cell + gap
+								let x = v.location.x - rect.minX
+								let y = v.location.y - rect.minY
+								let tc = Int(floor(x / step))
+								let tr = Int(floor(y / step))
+								guard tr >= 0, tc >= 0, tr < order, tc < order else { return }
 
-									// 2) Drop over board? → move/swap (COSTS 1 MOVE)
-									guard let rect = boardRectInStage, rect.contains(v.location) else { return }
-									let step = cell + gap
-									let x = v.location.x - rect.minX
-									let y = v.location.y - rect.minY
-									let tc = Int(floor(x / step))
-									let tr = Int(floor(y / step))
-									guard tr >= 0, tc >= 0, tr < order, tc < order else { return }
+								let xInCell = x - CGFloat(tc) * step
+								let yInCell = y - CGFloat(tr) * step
+								guard xInCell <= cell, yInCell <= cell else { return }
 
-									let xInCell = x - CGFloat(tc) * step
-									let yInCell = y - CGFloat(tr) * step
-									guard xInCell <= cell, yInCell <= cell else { return }
+								guard tr != r || tc != c else { return }
+								guard !model.locked.contains(.init(r: tr, c: tc)) else { return }
 
-									guard tr != r || tc != c else { return }
-									guard !model.locked.contains(.init(r: tr, c: tc)) else { return }
-
-									if let destCh = model.board[tr][tc] {
-										// swap
-										model.board[tr][tc] = ch
-										model.board[r][c]   = destCh
-									} else {
-										// move into empty
-										model.board[tr][tc] = ch
-										model.board[r][c]   = nil
-									}
-
-									model.moves += 1
-									onAnyMove(true)
+								if let destCh = model.board[tr][tc] {
+									// swap
+									model.board[tr][tc] = ch
+									model.board[r][c]   = destCh
+								} else {
+									// move into empty
+									model.board[tr][tc] = ch
+									model.board[r][c]   = nil
 								}
-						)
+
+								model.moves += 1
+								onAnyMove(true)
+							}
+					)
 				}
 			}
 			.frame(width: boardSize, height: boardSize, alignment: .top)
@@ -685,45 +740,69 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 		}
 	}
 
+
 	private struct TileCell: View {
 		let char: Character?
 		let locked: Bool
 		var side: CGFloat? = nil
 
 		var body: some View {
-			let tileFill: AnyShapeStyle = locked
-			? AnyShapeStyle(
-				LinearGradient(
-					colors: [.green.opacity(0.95), .green],
-					startPoint: .topLeading,
-					endPoint: .bottomTrailing
-				)
-			)
-			: AnyShapeStyle(Color(.systemBackground))
+			let corner: CGFloat = 12
 
-			let corner: CGFloat = 10
+			// Resolve a font size that scales with `side` if provided
+			let fontSize: CGFloat = {
+				if let s = side { return max(16, s * 0.45) }
+				return 24
+			}()
 
 			ZStack {
+				// Base tile styling — same as your main board cells
 				RoundedRectangle(cornerRadius: corner)
-					.fill(tileFill)
+					.fill(Color.softSandSat)
+					.softRaised(corner: corner)
 					.overlay(
 						RoundedRectangle(cornerRadius: corner)
-							.stroke(locked ? .white.opacity(0.85) : .secondary, lineWidth: 1)
+							.stroke(Color.black.opacity(0.22), lineWidth: 1) // darker outer ring
+					)
+					.overlay(
+						RoundedRectangle(cornerRadius: corner)
+							.inset(by: 0.5)
+							.stroke(Color.white.opacity(0.55), lineWidth: 0.5) // subtle inner highlight
+							.blendMode(.overlay)
 					)
 
+				// Letter
 				if let ch = char {
 					Text(String(ch))
-						.font(.system(size: 24, weight: .heavy))
+						.font(.system(size: fontSize, weight: .heavy))
+						.foregroundStyle(.primary)
+						.minimumScaleFactor(0.5)
+				}
+
+				// Locked overlay (keeps the same base but dims + shows a lock)
+				if locked {
+					RoundedRectangle(cornerRadius: corner)
+						.fill(Color.black.opacity(0.06))
+						.overlay(
+							Image(systemName: "lock.fill")
+								.font(.caption2.bold())
+								.foregroundStyle(.secondary)
+						)
 				}
 			}
+			// Size rules (keep your previous behavior)
 			.frame(width: side ?? nil, height: side ?? nil)
-			.frame(minWidth: side == nil ? 56 : nil,
-				   maxWidth: side == nil ? 96 : nil,
-				   minHeight: side == nil ? 56 : nil,
-				   maxHeight: side == nil ? 96 : nil)
+			.frame(
+				minWidth: side == nil ? 56 : nil,
+				maxWidth: side == nil ? 96 : nil,
+				minHeight: side == nil ? 56 : nil,
+				maxHeight: side == nil ? 96 : nil
+			)
 			.shadow(radius: 1, x: 0, y: 1)
+			.contentShape(Rectangle())
 		}
 	}
+
 
 	// MARK: - Mini bag UI (not used by default, but retained for reference)
 	private struct MiniBagView: View {
