@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct ContentView: View {
+    
+#if DEBUG
+@EnvironmentObject private var debug: DebugFlags
+#endif
+    
     @EnvironmentObject var game: GameState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
@@ -11,11 +16,6 @@ struct ContentView: View {
     var enableDailyWinUI: Bool = true   // ⬅️ new (default stays true for Daily)
     var showHeader: Bool = true   // NEW: allow callers to hide the nav title
 
-
-    // TESTING ONLY.  DO NOT LEAVE ON RELEASE
-    @State private var boardTest: Int = 0          // shifts day away from today
-    @State private var boostTest: Int = 0         // adds boosts to your current number
-    
     // MARK: Boosts
     @EnvironmentObject var boosts: BoostsService
     @State private var showBoostsPanel: Bool = false     // compact panel in the bag area
@@ -44,7 +44,7 @@ struct ContentView: View {
     
     // TESTING HELPERS
     private var effectiveBoostsRemaining: Int {
-        boosts.remaining + max(0, boostTest)
+        boosts.remaining + max(0, debug.boostTest)
     }
     private var canUseBoost: Bool {
         effectiveBoostsRemaining > 0
@@ -124,7 +124,7 @@ struct ContentView: View {
         .onAppear {
             guard !skipDailyBootstrap else { return }
             let offsetDate = Calendar(identifier: .gregorian).date(
-                byAdding: .day, value: boardTest, to: Date()
+                byAdding: .day, value: debug.boardTest, to: Date()
             ) ?? Date()
             game.bootstrapForToday(date: offsetDate)
         }
@@ -132,7 +132,7 @@ struct ContentView: View {
             guard !skipDailyBootstrap else { return }
             if newPhase == .active {
                 let offsetDate = Calendar(identifier: .gregorian).date(
-                    byAdding: .day, value: boardTest, to: Date()
+                    byAdding: .day, value: debug.boardTest, to: Date()
                 ) ?? Date()
                 game.bootstrapForToday(date: offsetDate)
             }

@@ -43,8 +43,15 @@ struct TutorialWorldView: View {
     @State private var tutorialAllowsBoosts = false   // flips true when we reach Step 3 (“Tap Boosts…”)
     @State private var showInsufficientCoins = false  // if you later enable wallet purchases here
 
+    private let kTutorialCompleted = "ach.tutorial.completed"
+    private func markTutorialCompleted() {
+        UserDefaults.standard.set(true, forKey: kTutorialCompleted)
+        NotificationCenter.default.post(name: .achievementsChanged, object: nil)
+    }
+
     var body: some View {
         ZStack {
+            Color.softSandSat.ignoresSafeArea()   // ← back layer
             switch step {
             case .intro:
                 IntroLesson(onContinue: { step = .level1 })
@@ -94,6 +101,8 @@ struct TutorialWorldView: View {
                         // FINAL tutorial level: award if allowed, and mark tutorial completed
                         let awarded = levels.awardCoinsIfAllowedInTutorial(3, markCompletedIfFinal: true)
                         lastAwardedCoins = awarded
+                        markTutorialCompleted()
+                        //print("tutorial won triggered")
                         step = .level2Win
                     }
                 )
@@ -354,7 +363,7 @@ private struct StaticSquare3x3: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16)) // keep or remove if you prefer flat
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -405,4 +414,8 @@ private func boostTile(icon: String, title: String, material: Material) -> some 
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.primary)
     }
+}
+
+extension Notification.Name {
+    static let achievementsChanged = Notification.Name("achievementsChanged")
 }

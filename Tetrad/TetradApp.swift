@@ -8,6 +8,10 @@ struct TetradApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
 
+#if DEBUG
+@StateObject private var debugFlags = DebugFlags()
+#endif
+    
     var body: some Scene {
         WindowGroup {
             RootView()
