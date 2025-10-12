@@ -132,7 +132,8 @@ private extension IntroView {
             .buttonStyle(SoftRaisedPillStyle(height: 52))
 
             Button {
-                navigateToGame = true
+                game.startDailyRun()   // set mode = .daily and bootstrap today's run
+                navigateToGame = true  // then navigate
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "bolt.fill").imageScale(.medium)

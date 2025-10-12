@@ -21,6 +21,10 @@ final class LevelsService: ObservableObject {
     // Tutorial coin gate (persisted)
     @Published var tutorialCompleted: Bool = false
 
+    // 🔔 Callback: fired once when a world transitions locked → unlocked
+    // Wire in App: levels.onWorldUnlocked = { _ in game.noteWorldUnlocked() }
+    var onWorldUnlocked: ((World) -> Void)?
+
     // MARK: - Storage keys
     private let kCoins               = "levels.coins"
     private let kUnlockedIDs         = "levels.unlocked.ids"
@@ -94,16 +98,28 @@ final class LevelsService: ObservableObject {
         return amount
     }
 
+
     /// Try to unlock the selected world using coins. Returns true if unlocked.
     @discardableResult
     func unlockSelectedIfPossible() -> Bool {
         let w = selectedWorld
+        // Already unlocked? nothing to do
         guard !isUnlocked(w) else { return true }
+        // Enough coins?
         guard coins >= w.unlockCost else { return false }
+
+        // Spend & unlock
         coins -= w.unlockCost
+        let wasLocked = !unlockedIDs.contains(w.id)
         unlockedIDs.insert(w.id)
         reorderWorldsUnlockedFirst()
         save()
+
+        // 🔔 Fire once (non-tutorial only) on the transition
+        if wasLocked && !w.isTutorial {
+            if Thread.isMainThread { onWorldUnlocked?(w) }
+            else { DispatchQueue.main.async { self.onWorldUnlocked?(w) } }
+        }
         return true
     }
 
@@ -134,9 +150,6 @@ final class LevelsService: ObservableObject {
     }
 
     /// Helper to zero out a computed payout tuple for tutorial replays.
-    /// Usage:
-    ///   let base = (total, bonus)
-    ///   let gated = levels.gatedPayout(total: base.total, bonus: base.bonus, for: world)
     func gatedPayout(total: Int, bonus: Int, for world: World?) -> (total: Int, bonus: Int) {
         guard let w = world, w.isTutorial, tutorialCompleted else {
             return (total, bonus)
@@ -290,6 +303,3 @@ extension LevelsService {
         return (base + bonus, base, bonus)
     }
 }
-
-
-

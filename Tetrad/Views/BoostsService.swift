@@ -21,6 +21,10 @@ final class BoostsService: ObservableObject {
     @Published private(set) var remaining: Int   // daily bucket
     @Published private(set) var purchased: Int   // purchased bucket (persists, no daily reset)
 
+    // Callbacks (wired from App): fire on main after use/purchase
+    var onBoostUsed: (() -> Void)?
+    var onBoostPurchased: ((Int) -> Void)?
+
     // MARK: - Init
     init() {
         let d = UserDefaults.standard
@@ -46,29 +50,48 @@ final class BoostsService: ObservableObject {
     var totalAvailable: Int { remaining + purchased }
 
     /// Spend one boost if available. Prefers daily, then purchased.
+    /// Returns true if a boost was consumed.
     @discardableResult
     func useOne() -> Bool {
-        guard remaining > 0 else { return false }
-        // Update the published bucket
-        if Thread.isMainThread {
-            remaining -= 1
+        guard totalAvailable > 0 else { return false }
+
+        if remaining > 0 {
+            if Thread.isMainThread { remaining -= 1 }
+            else { DispatchQueue.main.async { self.remaining -= 1 } }
         } else {
-            DispatchQueue.main.async { self.remaining -= 1 }
+            // daily is 0, draw from purchased
+            if Thread.isMainThread { purchased -= 1 }
+            else { DispatchQueue.main.async { self.purchased -= 1 } }
         }
+
         persist()
+
+        // Notify on main
+        if Thread.isMainThread { onBoostUsed?() }
+        else { DispatchQueue.main.async { self.onBoostUsed?() } }
+
         return true
     }
 
+    /// Grant free boosts to the **daily** bucket (e.g., rewards).
     func grant(count: Int) {
         guard count > 0 else { return }
-        if Thread.isMainThread {
-            remaining += count
-        } else {
-            DispatchQueue.main.async { self.remaining += count }
-        }
+        if Thread.isMainThread { remaining += count }
+        else { DispatchQueue.main.async { self.remaining += count } }
         persist()
     }
 
+    /// Add boosts to the **purchased** pool (e.g., IAP or shop).
+    func purchase(count: Int) {
+        guard count > 0 else { return }
+        if Thread.isMainThread { purchased += count }
+        else { DispatchQueue.main.async { self.purchased += count } }
+        persist()
+
+        // Notify on main with how many were added
+        if Thread.isMainThread { onBoostPurchased?(count) }
+        else { DispatchQueue.main.async { self.onBoostPurchased?(count) } }
+    }
 
     /// Call on app launch and when app becomes active.
     /// If the stored day != today (UTC), resets the daily bucket to the allowance.
@@ -78,7 +101,8 @@ final class BoostsService: ObservableObject {
         let last = d.string(forKey: keyLastResetUTC)
 
         if last != todayUTC {
-            remaining = dailyAllowance
+            if Thread.isMainThread { remaining = dailyAllowance }
+            else { DispatchQueue.main.async { self.remaining = self.dailyAllowance } }
             d.set(todayUTC, forKey: keyLastResetUTC)
             persist()
         }

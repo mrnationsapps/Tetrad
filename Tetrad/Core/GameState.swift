@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 
+@MainActor
 final class GameState: ObservableObject {
     // MARK: - Published state
     @Published var tiles: [LetterTile] = []
@@ -22,6 +23,19 @@ final class GameState: ObservableObject {
     @Published var worldWordJustCompleted: Bool = false      // flips true once when completed
     @Published var worldIndex: Int? = nil                    // if you read it elsewhere
 
+    // MARK: - Run mode (daily vs level)
+    enum RunMode { case daily, level }
+    @Published var mode: RunMode = .daily    // daily by default
+
+    // MARK: - Achievement telemetry (session-scoped)
+    @Published var boostsUsedThisRun: Int = 0
+
+    // MARK: - Achievement telemetry (lifetime totals)
+    // Make sure these are saved/loaded in your existing persistence snapshot.
+    @Published var totalLevelsSolved: Int = 0
+    @Published var totalDailiesSolved: Int = 0
+    @Published var boostsPurchasedTotal: Int = 0
+    @Published var worldsUnlockedCount: Int = 0
 
 
     // Smart Boost locks (runtime + persisted-by-coord for Daily)
@@ -37,6 +51,24 @@ final class GameState: ObservableObject {
     // MARK: - Lifecycle
     init() {}
 
+    // MARK: - Convenience entry points (Daily vs Level)
+
+
+    func startDailyRun() {
+        startRun(mode: .daily)
+        bootstrapForToday()
+    }
+
+    /// Start a specific Level (optionally restore prior snapshot)
+    func startLevelRun(seed: UInt64, dictionaryID: String, resumeIfAvailable: Bool = true) {
+        startRun(mode: .level)
+        startLevelSession(seed: seed, dictionaryID: dictionaryID)  // <— expects UInt64
+        if resumeIfAvailable {
+            restoreLevelSnapshotIfAvailable()
+        }
+    }
+
+    
     // MARK: - Daily bootstrap / generation / restore
     @MainActor
     func bootstrapForToday(date: Date = Date()) {
@@ -506,7 +538,41 @@ final class GameState: ObservableObject {
         // Fresh start (no snapshot found)
         persistProgressSnapshot()
     }
+    
+    // MARK: - Run lifecycle (lightweight wrappers)
+    func startRun(mode: RunMode) {
+        self.mode = mode
+        self.boostsUsedThisRun = 0
+        self.moveCount = 0        // assuming you already have moveCount
+        self.solved = false       // assuming you already have solved
+    }
 
+    func noteSolved() {
+        self.solved = true
+        switch mode {
+        case .daily:
+            totalDailiesSolved += 1
+            // Your existing streak logic should already update `streak` elsewhere.
+        case .level:
+            totalLevelsSolved += 1
+        }
+        persistProgressSnapshot() // call your existing persistence
+    }
+
+    func noteBoostUsed() {
+        boostsUsedThisRun += 1
+        // (no persistence necessary here unless you prefer)
+    }
+
+    func noteBoostPurchased(count: Int = 1) {
+        boostsPurchasedTotal += count
+        persistProgressSnapshot()
+    }
+
+    func noteWorldUnlocked() {
+        worldsUnlockedCount += 1
+        persistProgressSnapshot()
+    }
 
     // MARK: - Persistence snapshots
     

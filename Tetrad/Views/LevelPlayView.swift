@@ -358,16 +358,21 @@ struct LevelPlayView: View {
 
         // Show loading, yield a frame so the overlay is visible, then build
         isGenerating = true
-        Task {
+        Task { @MainActor in
             // Let SwiftUI render the overlay before the heavy work
             await Task.yield()
 
-            // Start (your method is @MainActor; that's fine — we just yielded first)
-            game.startLevelSession(seed: seed, dictionaryID: world.dictionaryID)
+            // NEW: use the helper; pass UInt64 seed; optionally resume prior snapshot
+            game.startLevelRun(
+                seed: UInt64(seed),
+                dictionaryID: world.dictionaryID,
+                resumeIfAvailable: true
+            )
 
             isGenerating = false
         }
     }
+
 
 
     private func awardCoinsOnce(_ amount: Int) {

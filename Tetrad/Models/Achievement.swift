@@ -8,35 +8,38 @@
 import SwiftUI
 
 struct Achievement: Identifiable {
-    let id = UUID()
+    var id: String { key }
     let key: String
     let title: String
     let subtitle: String
     let rewardCoins: Int
-    let condition: (GameState) -> Bool
+
+    // Make the closure main-actor isolated
+    let condition: @MainActor (GameState) -> Bool
 
     // Unlocked?
+    @MainActor
     func isUnlocked(using game: GameState) -> Bool {
         condition(game)
     }
 
-    // Claimed bookkeeping (simple UserDefaults per-achievement key)
     private var claimedKey: String { "ach.claimed.\(key)" }
 
     func isClaimed() -> Bool {
         UserDefaults.standard.bool(forKey: claimedKey)
     }
 
-    /// Convenience for UI: unlocked AND not yet claimed
+    /// unlocked AND not yet claimed
+    @MainActor
     func isClaimable(using game: GameState) -> Bool {
         isUnlocked(using: game) && !isClaimed()
     }
 
-    /// Mark this achievement’s reward as claimed.
     func markClaimed() {
         UserDefaults.standard.set(true, forKey: claimedKey)
     }
 }
+
 
 // MARK: - Catalog
 extension Achievement {
@@ -45,79 +48,108 @@ extension Achievement {
             key: "tutorial",
             title: "Tutorial Complete",
             subtitle: "Learn how to play.",
-            rewardCoins: 3,
+            rewardCoins: 5,
             condition: { _ in
-                // Matches the flag set in TutorialWorldView.markTutorialCompleted()
                 UserDefaults.standard.bool(forKey: "ach.tutorial.completed")
             }
         ),
 
         .init(
-            key: "first_solve",
-            title: "First Solve",
-            subtitle: "Complete your first daily puzzle.",
-            rewardCoins: 3,
-            condition: { $0.solved }
+            key: "unlock_world",
+            title: "First World",
+            subtitle: "Unlock your first World.",
+            rewardCoins: 5,
+            condition: { $0.worldsUnlockedCount >= 1 }
         ),
 
         .init(
-            key: "streak_3",
+            key: "five_levels",
+            title: "Just Getting Started",
+            subtitle: "Solve 5 Levels.",
+            rewardCoins: 5,
+            condition: { $0.totalLevelsSolved >= 5 }
+        ),
+
+        .init(
+            key: "five_boosts",
+            title: "A Little Help",
+            subtitle: "Buy 5 Boosts.",
+            rewardCoins: 5,
+            condition: { $0.boostsPurchasedTotal >= 5 }
+        ),
+
+        .init(
+            key: "first_daily",
+            title: "First Daily Solve",
+            subtitle: "Complete your first daily puzzle.",
+            rewardCoins: 5,
+            condition: { $0.totalDailiesSolved >= 1 }
+        ),
+
+        .init(
+            key: "streak_3_daily",
             title: "On a Roll",
-            subtitle: "3-day solve streak.",
-            rewardCoins: 3,
+            subtitle: "3-day Daily streak.",
+            rewardCoins: 5,
             condition: { $0.streak >= 3 }
         ),
+
         .init(
-            key: "streak_7",
+            key: "streak_7_daily",
             title: "Hot Streak",
-            subtitle: "7-day solve streak.",
-            rewardCoins: 3,
+            subtitle: "7-day Daily streak.",
+            rewardCoins: 5,
             condition: { $0.streak >= 7 }
         ),
+
         .init(
             key: "efficient_10",
             title: "Efficient Thinker",
             subtitle: "Solve in 10 moves or fewer.",
-            rewardCoins: 3,
+            rewardCoins: 5,
             condition: { $0.solved && $0.moveCount <= 10 }
         ),
+
         .init(
             key: "perfect_fill",
             title: "Perfect Fill",
-            subtitle: "Finish with no re-placements.",
-            rewardCoins: 3,
-            condition: { $0.solved && $0.moveCount == 0 }
+            subtitle: "Finish with no boosts.",
+            rewardCoins: 5,
+            condition: { $0.solved && $0.boostsUsedThisRun == 0 }
         ),
+
         .init(
             key: "daily_return",
             title: "Come Back Tomorrow",
-            subtitle: "Solve two days in a row.",
-            rewardCoins: 3,
+            subtitle: "Solve two dailies in a row.",
+            rewardCoins: 5,
             condition: { $0.streak >= 2 }
         )
-        // Add more achievements here, each with a rewardCoins value.
     ]
 }
 
+
 // MARK: - Queries / helpers for toasts & badges
 extension Achievement {
+    @MainActor
     static func unclaimed(using game: GameState) -> [Achievement] {
         all.filter { $0.isUnlocked(using: game) && !$0.isClaimed() }
     }
 
-    /// Marks all currently-unclaimed achievements as claimed and credits coins.
-    /// Returns the total coins granted.
     @discardableResult
+    @MainActor
     static func claimAll(using game: GameState, levels: LevelsService) -> Int {
         let pending = unclaimed(using: game)
-        let total = pending.reduce(0) { $0 + $1.rewardCoins }
-        for a in pending {
-            UserDefaults.standard.set(true, forKey: "ach.claimed.\(a.key)")
+        var total = 0
+        for a in pending where !a.isClaimed() {
+            a.markClaimed()
+            total += a.rewardCoins
         }
         if total > 0 { levels.addCoins(total) }
         return total
     }
 }
+
 
 
 
