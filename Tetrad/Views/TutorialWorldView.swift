@@ -104,6 +104,16 @@ struct TutorialWorldView: View {
                         markTutorialCompleted()
                         //print("tutorial won triggered")
                         step = .level2Win
+                        UserDefaults.standard.set(true, forKey: "tutorial.finished.once")
+//                        ToastCenter.shared.show(
+//                            text: "Achievement unlocked — Collect 3 coins →",
+//                            duration: 2.5,
+//                            onTap: {
+//                                // optional: navigate to the achievements screen
+//                                // navigateToIntroAchievements = true
+//                            }
+//                        )
+
                     }
                 )
 

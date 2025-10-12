@@ -9,6 +9,8 @@ import SwiftUI
 /// Reusable host: attaches Boosts/Wallet slide-up panels + the Footer to any screen.
 public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: ViewModifier {
     @EnvironmentObject private var levels: LevelsService
+    @EnvironmentObject private var game: GameState
+
     // Footer inputs
     let coins: Int?
     let boostsAvailable: Int?
@@ -24,18 +26,23 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
     @State private var showBoosts = false
     @State private var showWallet = false
 
+    // NEW: once user opens Wallet this session, stop pulsing
+    @State private var walletPulseDismissed = false
+
     // Panel look
     var panelHeight: CGFloat = 320
 
     public func body(content: Content) -> some View {
-        content
+        let hasUnclaimed = !Achievement.unclaimed(using: game).isEmpty
+        let shouldPulseWallet = hasUnclaimed && !walletPulseDismissed
+
+        return content
             // BOOSTS slide-up (with scrim)
             .overlay {
                 if showBoosts {
                     ZStack(alignment: .bottom) {
-                        // ⬇️ Make scrim tappable (not clear)
                         Rectangle()
-                            .fill(Color.black.opacity(0.01))
+                            .fill(Color.black.opacity(0.01)) // must be non-clear to catch taps
                             .ignoresSafeArea()
                             .contentShape(Rectangle())
                             .onTapGesture { withAnimation(.spring()) { showBoosts = false } }
@@ -64,7 +71,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                 }
             }
 
-            // WALLET slide-up (with scrim) – same container for consistency
+            // WALLET slide-up (with scrim)
             .overlay {
                 if showWallet {
                     ZStack(alignment: .bottom) {
@@ -109,6 +116,9 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     disabledStyle: disabledStyle,
                     isWalletEnabled: levels.hasUnlockedNonTutorial,
                     onTapWallet: {
+                        // Stop pulsing as soon as the player opens Wallet
+                        if !showWallet { walletPulseDismissed = true }
+
                         if showBoosts {
                             withAnimation(.spring()) { showBoosts = false }
                             withAnimation(.spring().delay(0.12)) { showWallet = true }
@@ -123,12 +133,22 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                         } else {
                             withAnimation(.spring()) { showBoosts.toggle() }
                         }
-                    }
+                    },
+                    walletPulse: shouldPulseWallet // 👈 into Footer
                 )
                 .zIndex(10)
             }
+
+            // When all rewards are collected, re-arm pulse for when new ones appear later
+            .onChange(of: hasUnclaimed) { _, nowHasUnclaimed in
+                if !nowHasUnclaimed {
+                    walletPulseDismissed = false
+                }
+            }
     }
 }
+
+
 
 
 public extension View {
@@ -138,7 +158,7 @@ public extension View {
         boostsAvailable: Int? = nil,
         isInteractable: Bool = true,
         disabledStyle: FooterDisabledStyle = .standard,
-        panelHeight: CGFloat = 320,
+        panelHeight: CGFloat = 400,
         @ViewBuilder boostsPanel: @escaping (_ dismiss: @escaping () -> Void) -> BoostsContent,
         @ViewBuilder walletPanel: @escaping (_ dismiss: @escaping () -> Void) -> WalletContent
     ) -> some View {

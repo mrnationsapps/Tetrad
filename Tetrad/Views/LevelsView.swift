@@ -105,7 +105,7 @@ struct LevelsView: View {
                 isInteractable: true,                 // footer is always active on Worlds
                 disabledStyle: .standard,
                 boostsPanel: { _ in WorldsBoostsPanel() },     // read-only note on this screen
-                walletPanel: { dismiss in WorldsWalletPanel(dismiss: dismiss) }
+                walletPanel: { dismiss in WalletPanelView(dismiss: dismiss) }   // 👈 shared
             )
     }
 

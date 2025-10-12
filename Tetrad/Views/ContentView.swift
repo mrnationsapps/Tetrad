@@ -10,6 +10,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
+    @EnvironmentObject var toast: ToastCenter
 
     var skipDailyBootstrap: Bool = false
     var par: Int? = nil
@@ -96,6 +97,9 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .transition(.scale.combined(with: .opacity))
             }
+            
+            ToastHost()
+                .environmentObject(ToastCenter.shared)
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
 
@@ -141,7 +145,14 @@ struct ContentView: View {
         // Only trigger Daily win popup when enabled
         .onChange(of: game.solved) { _, isSolved in
             guard enableDailyWinUI else { return }
-            if isSolved { withAnimation(.spring()) { showWinPopup = true } }
+            if isSolved { withAnimation(.spring()) { showWinPopup = true }
+                
+                // ✅ After Daily solve → notify if any new unclaimed rewards exist
+                let newlyUnclaimed = Achievement.all.filter { $0.isUnlocked(using: game) && !$0.isClaimed() }
+                if !newlyUnclaimed.isEmpty {
+                    toast.showAchievementUnlock(count: newlyUnclaimed.count)
+                }
+            }
         }
         .onAppear { showWinPopup = false }  // ensure clean state on re-entry
         
@@ -151,7 +162,7 @@ struct ContentView: View {
             isInteractable: true,
             disabledStyle: .standard,
             boostsPanel: { dismiss in DailyBoostsPanel(dismiss: dismiss) },
-            walletPanel: { dismiss in DailyWalletPanel(dismiss: dismiss) }
+            walletPanel: { dismiss in WalletPanelView(dismiss: dismiss) }   // 👈 shared
         )
     }
 
@@ -227,113 +238,162 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Daily Wallet Panel (buy boosts + coins)
-    private struct DailyWalletPanel: View {
-        @EnvironmentObject var levels: LevelsService
-        @EnvironmentObject var boosts: BoostsService
-        let dismiss: () -> Void
-
-        @State private var showInsufficientCoins = false
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header
-                HStack {
-                    Label("Wallet", systemImage: "creditcard")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                        Text("\(levels.coins)").font(.headline).monospacedDigit()
-                    }
-                    .softRaisedCapsule()
-                }
-
-                // Buy Boosts
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
-                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
-                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
-                    }
-                }
-
-                // Get Coins (IAP stubs)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Get Coins").font(.subheadline).foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        walletIAPPill(amount: 100,  price: "$0.99") { addCoins(100) }
-                        walletIAPPill(amount: 300,  price: "$2.99") { addCoins(300) }
-                        walletIAPPill(amount: 1200, price: "$7.99") { addCoins(1200) }
-                    }
-                }
-            }
-            .alert("Not enough coins", isPresented: $showInsufficientCoins) {
-                Button("OK", role: .cancel) { }
-            } message: { Text("You don't have enough coins for that purchase.") }
-        }
-
-        // Actions
-        private func buyReveal(cost: Int, count: Int) {
-            if levels.coins >= cost {
-                levels.addCoins(-cost)
-                boosts.grant(count: count)
-                #if os(iOS)
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                #endif
-                dismiss()
-            } else {
-                showInsufficientCoins = true
-            }
-        }
-        private func addCoins(_ n: Int) {
-            levels.addCoins(n)
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            dismiss()
-        }
-
-        // Tiny pills (local copies)
-        @ViewBuilder
-        private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
-            Button(action: action) {
-                VStack(spacing: 6) {
-                    Image(systemName: icon).font(.headline)
-                    Text(title).font(.caption).lineLimit(1)
-                    HStack(spacing: 4) {
-                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                        Text("\(cost)").font(.caption2).monospacedDigit()
-                    }.opacity(0.9)
-                }
-                .foregroundStyle(.primary)
-                .padding(.vertical, 10).padding(.horizontal, 12)
-                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-        }
-
-        @ViewBuilder
-        private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
-            Button(action: action) {
-                VStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                        Text("+\(amount)").font(.caption).monospacedDigit()
-                    }
-                    Text(price).font(.caption2).opacity(0.9)
-                }
-                .foregroundStyle(.primary)
-                .padding(.vertical, 10).padding(.horizontal, 12)
-                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-        }
-    }
+//    // MARK: - Daily Wallet Panel (buy boosts + coins)
+//    private struct DailyWalletPanel: View {
+//        @EnvironmentObject var levels: LevelsService
+//        @EnvironmentObject var boosts: BoostsService
+//        @EnvironmentObject var game: GameState
+//
+//        let dismiss: () -> Void
+//
+//        @State private var showInsufficientCoins = false
+//        @State private var justCollected: Int = 0        // optional feedback
+//
+//        var body: some View {
+//            // Pending rewards
+//            let unclaimed = Achievement.unclaimed(using: game)
+//            let pendingTotal = unclaimed.reduce(0) { $0 + $1.rewardCoins }
+//
+//            return VStack(alignment: .leading, spacing: 16) {
+//                // Header
+//                HStack {
+//                    Label("Wallet", systemImage: "creditcard")
+//                        .font(.caption)
+//                        .foregroundStyle(.secondary)
+//                    Spacer()
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
+//                        Text("\(levels.coins)").font(.headline).monospacedDigit()
+//                    }
+//                    .softRaisedCapsule()
+//                }
+//
+//                // ✅ Collect Rewards (only if pending)
+//                if pendingTotal > 0 {
+//                    VStack(alignment: .leading, spacing: 8) {
+//                        Text("Rewards Available")
+//                            .font(.subheadline)
+//                            .foregroundStyle(.secondary)
+//
+//                        Button {
+//                            let added = Achievement.claimAll(using: game, levels: levels)
+//                            #if os(iOS)
+//                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+//                            #endif
+//                            // Optionally you could flash a local “+added coins” UI here.
+//                            dismiss()
+//                        } label: {
+//                            HStack(spacing: 10) {
+//                                Image(systemName: "gift.fill").imageScale(.medium)
+//                                Text("Collect Rewards")
+//                                    .font(.headline)
+//                                Spacer()
+//                                HStack(spacing: 4) {
+//                                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+//                                    Text("+\(pendingTotal)").font(.subheadline).monospacedDigit()
+//                                }
+//                            }
+//                            .foregroundStyle(.primary)
+//                            .padding(.vertical, 12)
+//                            .padding(.horizontal, 14)
+//                            .background(
+//                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                                    .fill(Color.white.opacity(0.14))
+//                                    .overlay(
+//                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                                            .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+//                                    )
+//                            )
+//                        }
+//                        .buttonStyle(.plain)
+//                    }
+//                }
+//
+//                // Buy Boosts
+//                VStack(alignment: .leading, spacing: 8) {
+//                    Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
+//                    HStack(spacing: 10) {
+//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
+//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
+//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
+//                    }
+//                }
+//
+//                // Get Coins (IAP stubs)
+//                VStack(alignment: .leading, spacing: 8) {
+//                    Text("Get Coins").font(.subheadline).foregroundStyle(.secondary)
+//                    HStack(spacing: 10) {
+//                        walletIAPPill(amount: 100,  price: "$0.99") { addCoins(100) }
+//                        walletIAPPill(amount: 300,  price: "$2.99") { addCoins(300) }
+//                        walletIAPPill(amount: 1200, price: "$7.99") { addCoins(1200) }
+//                    }
+//                }
+//            }
+//            .alert("Not enough coins", isPresented: $showInsufficientCoins) {
+//                Button("OK", role: .cancel) { }
+//            } message: { Text("You don't have enough coins for that purchase.") }
+//        }
+//
+//
+//        // Actions
+//        private func buyReveal(cost: Int, count: Int) {
+//            if levels.coins >= cost {
+//                levels.addCoins(-cost)
+//                boosts.grant(count: count)
+//                #if os(iOS)
+//                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+//                #endif
+//                dismiss()
+//            } else {
+//                showInsufficientCoins = true
+//            }
+//        }
+//        private func addCoins(_ n: Int) {
+//            levels.addCoins(n)
+//            #if os(iOS)
+//            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+//            #endif
+//            dismiss()
+//        }
+//
+//        // Tiny pills (local copies)
+//        @ViewBuilder
+//        private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
+//            Button(action: action) {
+//                VStack(spacing: 6) {
+//                    Image(systemName: icon).font(.headline)
+//                    Text(title).font(.caption).lineLimit(1)
+//                    HStack(spacing: 4) {
+//                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+//                        Text("\(cost)").font(.caption2).monospacedDigit()
+//                    }.opacity(0.9)
+//                }
+//                .foregroundStyle(.primary)
+//                .padding(.vertical, 10).padding(.horizontal, 12)
+//                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+//                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+//            }
+//            .buttonStyle(.plain)
+//        }
+//
+//        @ViewBuilder
+//        private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
+//            Button(action: action) {
+//                VStack(spacing: 6) {
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+//                        Text("+\(amount)").font(.caption).monospacedDigit()
+//                    }
+//                    Text(price).font(.caption2).opacity(0.9)
+//                }
+//                .foregroundStyle(.primary)
+//                .padding(.vertical, 10).padding(.horizontal, 12)
+//                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+//                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+//            }
+//            .buttonStyle(.plain)
+//        }
+//    }
 
     // MARK: - Small tile used in Boosts panel
     private struct BoostTile: View {

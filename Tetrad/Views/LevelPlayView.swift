@@ -6,6 +6,7 @@ struct LevelPlayView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
+    @EnvironmentObject var toast: ToastCenter
 
     let world: World
 
@@ -13,6 +14,8 @@ struct LevelPlayView: View {
     @State private var showWin = false
     @State private var didAwardCoins = false
     @State private var par: Int = 0
+    @State private var navigateToAchievements = false
+
 
     // Banner state
     @State private var showWorldBanner = false
@@ -37,6 +40,9 @@ struct LevelPlayView: View {
 
                 .overlay(alignment: .center) { auraOverlay }   // UNDER banner
                 .overlay(alignment: .center) { bannerOverlay } // OVER aura
+            
+            ToastHost()
+                .environmentObject(ToastCenter.shared)
         }
         // 1) particle aura
         //.overlay(auraOverlay, alignment: .center)
@@ -61,16 +67,30 @@ struct LevelPlayView: View {
         // Solve handling (delay if banner also firing)
         .onChange(of: game.solved) { _, isSolved in
             guard isSolved && game.isLevelMode else { return }
+
+            let fireWinAndToast = {
+                withAnimation(.spring()) { showWin = true }
+
+                // 🔔 If any new achievements are now unlocked but unclaimed, show a toast
+                let newlyUnclaimed = Achievement.unclaimed(using: game)
+                if !newlyUnclaimed.isEmpty {
+                    toast.showAchievementUnlock(count: newlyUnclaimed.count) {
+                    }
+                }
+
+            }
+
             if showWorldBanner || pendingWinDelay {
                 pendingWinDelay = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     pendingWinDelay = false
-                    withAnimation(.spring()) { showWin = true }
+                    fireWinAndToast()
                 }
             } else {
-                withAnimation(.spring()) { showWin = true }
+                fireWinAndToast()
             }
         }
+
 
         .overlay(generatingOverlay)
 
@@ -495,4 +515,3 @@ private struct CountUpLabel: View, Animatable {
             .monospacedDigit()
     }
 }
-

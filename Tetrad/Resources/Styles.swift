@@ -91,18 +91,44 @@ struct SoftRaisedCapsule: ViewModifier {
     }
 }
 
-struct SoftRaisedPillStyle: ButtonStyle {
-    var height: CGFloat = 52
+public struct SoftRaisedPillStyle: ButtonStyle {
+    var height: CGFloat = 48
+    var fill: Color = Color(.secondarySystemBackground)   // 👈 NEW: tint
+    var foreground: Color = .primary                      // 👈 optional
+    var stroke: Color = Color.white.opacity(0.22)         // 👈 optional
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 16, weight: .semibold))
-            .padding(.horizontal, 20)
+    public init(height: CGFloat = 48,
+                fill: Color = Color(.secondarySystemBackground),
+                foreground: Color = .primary,
+                stroke: Color = Color.white.opacity(0.22)) {
+        self.height = height
+        self.fill = fill
+        self.foreground = foreground
+        self.stroke = stroke
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+
+        return configuration.label
             .frame(height: height)
-            .contentShape(Capsule())
-            .softRaisedCapsule(pressed: configuration.isPressed) // 👈 uses your style
+            .frame(maxWidth: .infinity, alignment: .center)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 14)
+            .background(
+                Capsule()
+                    .fill(fill)
+                    .overlay(
+                        Capsule().stroke(stroke, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(pressed ? 0.15 : 0.25),
+                            radius: pressed ? 4 : 8, y: pressed ? 2 : 4)
+            )
+            .scaleEffect(pressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: pressed)
     }
 }
+
 
 extension View {
     /// Soft-raised pill. Use on the Boosts/Letters toggle or other pill actions.
@@ -127,6 +153,18 @@ extension Color {
     static let softSandBright = Color(red: 1.000, green: 0.973, blue: 0.925) // #FFF8EC
     static let softgreen = Color(red: 0.514, green: 0.612, blue: 0.588) // #839C96
     static let softSage = Color(red: 0.686, green: 0.741, blue: 0.729) // #AFBDBA
+    static let softYellow = Color(red: 0.961, green: 0.902, blue: 0.651) // #F5E6A6
+    static let blazingYellow = Color(red: 1.000, green: 1.000, blue: 0.000) // #FFFF00
+
+
+
+
+
+
+
+
+
+
 
 
 

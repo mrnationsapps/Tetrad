@@ -14,34 +14,31 @@ public enum FooterDisabledStyle {
 }
 
 public struct Footer: View {
-    // (Optional) fallback so the badge always shows the live coin count even if `coins == nil`
     @EnvironmentObject private var levels: LevelsService
     private var coinDisplay: Int { coins ?? levels.coins }
 
-    // Read-only display inputs
     public var coins: Int? = nil
     public var boostsAvailable: Int? = nil
     public var disabledStyle: FooterDisabledStyle = .standard
 
-    // Selected states
     @Binding public var isWalletActive: Bool
     @Binding public var isBoostsActive: Bool
 
-    // Global footer interactivity (unchanged)
     public var isInteractable: Bool = true
-
-    // NEW: enable/disable ONLY the Wallet button (not the badge)
     public var isWalletEnabled: Bool = true
 
-    // Actions
     public var onTapWallet: () -> Void
     public var onTapBoosts: () -> Void
 
-    // Styling
     public var barBackground: AnyShapeStyle = AnyShapeStyle(.ultraThinMaterial)
     public var pillHeight: CGFloat = 44
     public var horizontalPadding: CGFloat = 16
     public var verticalPadding: CGFloat = 10
+    public var walletPulse: Bool = false
+
+    // NEW: local animation driver so we can *stop* repeatForever cleanly
+    @State private var pulsePhase: CGFloat = 0   // 0 → 1
+    private let pulseAmplitude: CGFloat = 0.20   // bump size (8%)
 
     public init(
         coins: Int? = nil,
@@ -50,13 +47,14 @@ public struct Footer: View {
         isBoostsActive: Binding<Bool>,
         isInteractable: Bool = true,
         disabledStyle: FooterDisabledStyle = .standard,
-        isWalletEnabled: Bool = true,                 // NEW
+        isWalletEnabled: Bool = true,
         onTapWallet: @escaping () -> Void,
         onTapBoosts: @escaping () -> Void,
         barBackground: AnyShapeStyle = AnyShapeStyle(.ultraThinMaterial),
         pillHeight: CGFloat = 44,
         horizontalPadding: CGFloat = 16,
-        verticalPadding: CGFloat = 10
+        verticalPadding: CGFloat = 10,
+        walletPulse: Bool = false
     ) {
         self.coins = coins
         self.boostsAvailable = boostsAvailable
@@ -71,17 +69,20 @@ public struct Footer: View {
         self.pillHeight = pillHeight
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
+        self.walletPulse = walletPulse
     }
 
     public var body: some View {
+        let isPulsing = walletPulse && !isWalletActive
+
         HStack(spacing: 12) {
-            // WALLET (button can be disabled, badge stays bright)
+            // WALLET
             ZStack(alignment: .topTrailing) {
                 Button(action: onTapWallet) {
                     LabeledPill(
                         title: "Wallet",
                         systemImage: "creditcard",
-                        badgeCount: nil // we render our own badge so it won't be dimmed
+                        badgeCount: nil
                     )
                     .accessibilityLabel(Text("Open Wallet"))
                     .background(
@@ -105,18 +106,40 @@ public struct Footer: View {
                         lineWidth: isWalletActive ? 1.25 : 1
                     )
                 )
-                // Disable & subtly dim ONLY the button
+                // 👇 Pulse driven by local phase (cleanly stops when condition flips)
+                .scaleEffect(1.0 + pulseAmplitude * pulsePhase)
+                .onAppear {
+                    if isPulsing {
+                        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                            pulsePhase = 1
+                        }
+                    } else {
+                        pulsePhase = 0
+                    }
+                }
+                .onChange(of: isPulsing) { _, now in
+                    if now {
+                        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                            pulsePhase = 1
+                        }
+                    } else {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            pulsePhase = 0
+                        }
+                    }
+                }
+
                 .disabled(!isInteractable || !isWalletEnabled)
                 .opacity(isWalletEnabled ? 1.0 : 0.5)
                 .grayscale(isWalletEnabled ? 0 : 0.25)
 
-                // 🔴 Always-on coin badge — not affected by button dimming
-                CoinBadge(coins: coinDisplay)   // uses your shared red badge
+                // Always-on coin badge
+                CoinBadge(coins: coinDisplay)
                     .offset(x: 9, y: -7)
                     .allowsHitTesting(false)
             }
 
-            // BOOSTS (unchanged)
+            // BOOSTS
             Button(action: onTapBoosts) {
                 LabeledPill(
                     title: "Boosts",
@@ -142,12 +165,14 @@ public struct Footer: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .allowsHitTesting(isInteractable)             // global footer lock (unchanged)
+        .allowsHitTesting(isInteractable)
         .opacity(isInteractable ? 1 : disabledStyle.opacity)
         .grayscale(isInteractable ? 0 : disabledStyle.grayscale)
         .saturation(isInteractable ? 1 : disabledStyle.saturation)
     }
 }
+
+
 
 
 

@@ -15,12 +15,13 @@ struct IntroView: View {
     // Reward FX
     @State private var showRewardFX = false
     @State private var rewardCoins: Int = 0
+    @State private var didShowRewardToastThisSession = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.softSandSat.ignoresSafeArea()
-
+                
                 // Main content
                 VStack(spacing: 20) {
                     header
@@ -40,8 +41,24 @@ struct IntroView: View {
                     .environmentObject(game)
             }
         }
-        .onAppear { achievements = Achievement.all }
+        
+        .onAppear {
+            achievements = Achievement.all
+
+            // Only show once per app session
+            guard !didShowRewardToastThisSession else { return }
+
+            // Which unlocked achievements haven't been claimed yet?
+            let newlyUnclaimed = Achievement.unclaimed(using: game)
+            if !newlyUnclaimed.isEmpty {
+                didShowRewardToastThisSession = true
+                ToastCenter.shared.showAchievementUnlock(count: newlyUnclaimed.count) {
+                    // navigateToIntroAchievements = true   // if you wire this route up
+                }
+            }
+        }
     }
+
 }
 
 // MARK: - Chunks

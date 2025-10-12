@@ -98,3 +98,26 @@ extension Achievement {
         // Add more achievements here, each with a rewardCoins value.
     ]
 }
+
+// MARK: - Queries / helpers for toasts & badges
+extension Achievement {
+    static func unclaimed(using game: GameState) -> [Achievement] {
+        all.filter { $0.isUnlocked(using: game) && !$0.isClaimed() }
+    }
+
+    /// Marks all currently-unclaimed achievements as claimed and credits coins.
+    /// Returns the total coins granted.
+    @discardableResult
+    static func claimAll(using game: GameState, levels: LevelsService) -> Int {
+        let pending = unclaimed(using: game)
+        let total = pending.reduce(0) { $0 + $1.rewardCoins }
+        for a in pending {
+            UserDefaults.standard.set(true, forKey: "ach.claimed.\(a.key)")
+        }
+        if total > 0 { levels.addCoins(total) }
+        return total
+    }
+}
+
+
+

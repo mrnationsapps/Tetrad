@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct TetradApp: App {
+    
     @StateObject private var game   = GameState()
     @StateObject private var boosts = BoostsService()
     @StateObject private var levels = LevelsService()
@@ -18,6 +19,7 @@ struct TetradApp: App {
                 .environmentObject(game)
                 .environmentObject(boosts)
                 .environmentObject(levels)
+                .environmentObject(ToastCenter.shared)
                 .onAppear {
                     boosts.resetIfNeeded()
                     levels.loadProgressIfNeeded()
