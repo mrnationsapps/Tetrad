@@ -29,7 +29,11 @@ struct LevelPlayView: View {
     @State private var rewardCount: Double = 0
     @State private var coinFly = false
 
-
+    private func handleBack() {
+        game.persistAllSafe()   // ensure snapshot is written
+        dismiss()
+    }
+    
     // MARK: - Main Body
     var body: some View {
         ZStack {
@@ -41,8 +45,10 @@ struct LevelPlayView: View {
                 .overlay(alignment: .center) { auraOverlay }   // UNDER banner
                 .overlay(alignment: .center) { bannerOverlay } // OVER aura
             
-            ToastHost()
-                .environmentObject(ToastCenter.shared)
+                .onDisappear {
+                    game.persistAllSafe()   // saves achievement totals + current run snapshot
+                }
+
         }
         // 1) particle aura
         //.overlay(auraOverlay, alignment: .center)
@@ -345,9 +351,14 @@ struct LevelPlayView: View {
     }
 
     private func startNewSession() {
+        
+        levels.loadProgressIfNeeded() // make sure levelIndex is loaded
+
         let idx  = levels.levelIndex(for: world)
         par      = levels.levelPar(for: world, levelIndex: idx)
-        let seed = levels.seed(for: world, levelIndex: idx)
+        let seed = levels.seed(for: world, levelIndex: idx)   // UInt64
+
+        print("▶️ Level entry — world=\(world.id) idx=\(idx) seed=\(seed)")
 
         // Reset view flags
         showWin = false
@@ -356,15 +367,13 @@ struct LevelPlayView: View {
         showWorldBanner = false
         pendingWinDelay = false
 
-        // Show loading, yield a frame so the overlay is visible, then build
         isGenerating = true
         Task { @MainActor in
-            // Let SwiftUI render the overlay before the heavy work
-            await Task.yield()
+            await Task.yield() // let the loading overlay render
 
-            // NEW: use the helper; pass UInt64 seed; optionally resume prior snapshot
+            // Always route through startLevelRun; it will restore if a snapshot exists.
             game.startLevelRun(
-                seed: UInt64(seed),
+                seed: seed,
                 dictionaryID: world.dictionaryID,
                 resumeIfAvailable: true
             )
@@ -372,7 +381,6 @@ struct LevelPlayView: View {
             isGenerating = false
         }
     }
-
 
 
     private func awardCoinsOnce(_ amount: Int) {

@@ -105,7 +105,10 @@ struct ContentView: View {
 
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
+                Button {
+                    //handleBack()
+                    dismiss()
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left").imageScale(.medium)
                         Text("Back")

@@ -48,7 +48,10 @@ struct LevelsView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button { dismiss() } label: {
+                    Button {
+                        //handleBack()
+                        dismiss()
+                    } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "chevron.left").imageScale(.medium)
                             Text("Back")

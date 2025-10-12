@@ -51,6 +51,17 @@ final class GameState: ObservableObject {
     // MARK: - Lifecycle
     init() {}
 
+    // MARK: - Achievement totals persistence
+    private let kAchTotals = "ach.totals.v1"
+
+    private struct AchTotals: Codable {
+        var totalLevelsSolved: Int
+        var totalDailiesSolved: Int
+        var boostsPurchasedTotal: Int
+        var worldsUnlockedCount: Int
+    }
+
+    
     // MARK: - Convenience entry points (Daily vs Level)
 
 
@@ -163,6 +174,30 @@ final class GameState: ObservableObject {
         clearBoostLocks(for: todayKey)
         let run = RunState(moves: 0, solvedToday: false, placements: [], streak: streak, lastPlayedDayUTC: todayKey)
         Persistence.saveRunState(run)
+    }
+
+    // Load/save achievement totals (internal so app code can call them)
+    func loadAchievementTotals() {
+        let d = UserDefaults.standard
+        if let data = d.data(forKey: kAchTotals),
+           let t = try? JSONDecoder().decode(AchTotals.self, from: data) {
+            totalLevelsSolved     = t.totalLevelsSolved
+            totalDailiesSolved    = t.totalDailiesSolved
+            boostsPurchasedTotal  = t.boostsPurchasedTotal
+            worldsUnlockedCount   = t.worldsUnlockedCount
+        }
+    }
+
+    func saveAchievementTotals() {
+        let t = AchTotals(
+            totalLevelsSolved: totalLevelsSolved,
+            totalDailiesSolved: totalDailiesSolved,
+            boostsPurchasedTotal: boostsPurchasedTotal,
+            worldsUnlockedCount: worldsUnlockedCount
+        )
+        if let data = try? JSONEncoder().encode(t) {
+            UserDefaults.standard.set(data, forKey: kAchTotals)
+        }
     }
 
     // MARK: - Daily “new puzzle”
@@ -429,9 +464,10 @@ final class GameState: ObservableObject {
 
         let themedRaw = DictionaryLoader.loadWorldDictionary(named: dictionaryID)
         let themed = themedRaw.map { $0.lowercased() }.filter { $0.count == 4 && $0.allSatisfy(\.isLetter) }
-        let themedSet = Set(themed)
 
-        let all = Array(Set(base).union(themedSet))
+        // Keep a set for O(1) membership checks, but pass a **stable, sorted** list to the generator
+        let themedSet = Set(themed)
+        let all = Array(Set(base).union(themedSet)).sorted()   // ✅ deterministic input order
         let gen = WordSquareGenerator(words: all)
 
         var foundSolution: [String]? = nil
@@ -441,7 +477,9 @@ final class GameState: ObservableObject {
 
         // Try a number of attempts to find a solution that includes a themed word
         for attempt in 0..<120 {
-            var rng: any RandomNumberGenerator = SystemRandomNumberGenerator()
+            // ✅ Deterministic RNG per level (and per attempt, so we can search)
+            var rng: any RandomNumberGenerator = SeededRNG(seed: seed &+ UInt64(attempt))
+
             if let puzzle = gen.generateDaily(rng: &rng) {
                 if let idx = puzzle.solution.firstIndex(where: { themedSet.contains($0) }) {
                     foundSolution = puzzle.solution
@@ -450,10 +488,11 @@ final class GameState: ObservableObject {
                     usedThemedWord = true
                     break
                 }
+                // Deterministic fallback (capture first viable square)
                 if foundSolution == nil {
                     foundSolution = puzzle.solution
                     foundLetters  = puzzle.letters
-                    theWorldIndex = Int((seed &+ UInt64(attempt)) % 4) // stable-ish fallback
+                    theWorldIndex = Int((seed &+ UInt64(attempt)) % 4)
                 }
             }
         }
@@ -538,6 +577,7 @@ final class GameState: ObservableObject {
         // Fresh start (no snapshot found)
         persistProgressSnapshot()
     }
+
     
     // MARK: - Run lifecycle (lightweight wrappers)
     func startRun(mode: RunMode) {
@@ -548,39 +588,59 @@ final class GameState: ObservableObject {
     }
 
     func noteSolved() {
-        self.solved = true
+        solved = true
         switch mode {
-        case .daily:
-            totalDailiesSolved += 1
-            // Your existing streak logic should already update `streak` elsewhere.
-        case .level:
-            totalLevelsSolved += 1
+        case .daily: totalDailiesSolved += 1
+        case .level: totalLevelsSolved  += 1
         }
-        persistProgressSnapshot() // call your existing persistence
+        saveAchievementTotals()
     }
 
     func noteBoostUsed() {
         boostsUsedThisRun += 1
-        // (no persistence necessary here unless you prefer)
+        // no totals change to persist here
     }
 
     func noteBoostPurchased(count: Int = 1) {
         boostsPurchasedTotal += count
-        persistProgressSnapshot()
+        saveAchievementTotals()
     }
 
     func noteWorldUnlocked() {
         worldsUnlockedCount += 1
-        persistProgressSnapshot()
+        saveAchievementTotals()
     }
 
     // MARK: - Persistence snapshots
     
     @MainActor
+    func persistAllSafe() {
+        // If you added achievement totals, you can call saveAchievementTotals() here (optional)
+        if identity != nil {            // only when a run exists
+            persistProgressSnapshot()   // your existing private method
+        }
+    }
+
+    @MainActor
     private func restoreLevelSnapshotIfAvailable() -> Bool {
-        guard let id = identity else { return false }
-        guard var run = Persistence.loadRunState(),
-              run.lastPlayedDayUTC == id.dayUTC else { return false }
+        // 0) Read identity + run
+        guard let id = identity else {
+            print("🧪 RESTORE miss — expected=<no identity> found=nil")
+            return false
+        }
+        guard let loaded = Persistence.loadRunState() else {
+            print("🧪 RESTORE miss — expected=\(id.dayUTC) found=nil")
+            return false
+        }
+        // 1) Compare identities and log outcome
+        if loaded.lastPlayedDayUTC != id.dayUTC {
+            print("🧪 RESTORE miss — expected=\(id.dayUTC) found=\(loaded.lastPlayedDayUTC)")
+            return false
+        }
+        print("✅ RESTORE hit — id=\(id.dayUTC) placements=\(loaded.placements.count) moves=\(loaded.moves)")
+
+        // 2) Proceed with restore using `run`
+        var run = loaded
 
         // Restore counters/flags
         moveCount = run.moves
@@ -614,13 +674,14 @@ final class GameState: ObservableObject {
                 worldLockedTileIDs.insert(t.id)
             }
         }
-        // Re-evaluate completion flag
         checkWorldWordComplete()
 
         return true
     }
+
     
     private func persistProgressSnapshot() {
+        
         guard let id = identity else { return }
         var placements: [TilePlacement] = []
         for r in 0..<4 {
@@ -630,6 +691,9 @@ final class GameState: ObservableObject {
                 }
             }
         }
+        
+        print("📦 SAVE — id=\(identity?.dayUTC ?? "nil") placements=\(placements.count) moves=\(moveCount) solved=\(solved)")
+
         let run = RunState(moves: moveCount,
                            solvedToday: solved,
                            placements: placements,

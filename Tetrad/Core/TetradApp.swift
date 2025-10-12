@@ -27,21 +27,25 @@ struct TetradApp: App {
                 #endif
 
                 .onAppear {
-                    // Daily resets / progress loads
                     boosts.resetIfNeeded()
                     levels.loadProgressIfNeeded()
+                    
+                    // Load totals on launch
+                    game.loadAchievementTotals()
 
-                    // Callbacks
-                    boosts.onBoostUsed = {
-                        game.noteBoostUsed()
-                    }
-                    boosts.onBoostPurchased = { count in
-                        game.noteBoostPurchased(count: count)
-                    }
-                    levels.onWorldUnlocked = { _ in
-                        game.noteWorldUnlocked()
+                    // 🔗 existing callbacks...
+                    boosts.onBoostUsed = { game.noteBoostUsed() }
+                    boosts.onBoostPurchased = { count in game.noteBoostPurchased(count: count) }
+                    levels.onWorldUnlocked = { _ in game.noteWorldUnlocked() }
+
+                    // Hotfix sync: reflect currently unlocked (non-tutorial) worlds into the counter
+                    let nonTutorialUnlocked = levels.unlockedIDs.filter { $0 != "tutorial" }.count
+                    if game.worldsUnlockedCount != nonTutorialUnlocked {
+                        game.worldsUnlockedCount = nonTutorialUnlocked
+                        game.saveAchievementTotals()
                     }
                 }
+
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active {
