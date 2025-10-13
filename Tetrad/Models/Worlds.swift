@@ -51,7 +51,7 @@ enum WorldsCatalog {
               name: "Holidays",
               artName: "Holiday",
               unlockCost: 14,
-              dictionaryID: "Places_Dictionary",       // temp until you add Holidays_Dictionary.txt
+              dictionaryID: "Holiday_Dictionary",
               isTutorial: false),
 
         World(id: "retro",
@@ -95,7 +95,7 @@ struct WorldsBoostsPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(boosts.remaining) left today")
+                Text("\(boosts.remaining) left")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

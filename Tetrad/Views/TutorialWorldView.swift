@@ -42,12 +42,37 @@ struct TutorialWorldView: View {
     @State private var showRevealTip = false
     @State private var tutorialAllowsBoosts = false   // flips true when we reach Step 3 (“Tap Boosts…”)
     @State private var showInsufficientCoins = false  // if you later enable wallet purchases here
+    @State private var showCoins = false
 
     private let kTutorialCompleted = "ach.tutorial.completed"
     private func markTutorialCompleted() {
         UserDefaults.standard.set(true, forKey: kTutorialCompleted)
         NotificationCenter.default.post(name: .achievementsChanged, object: nil)
     }
+    
+    @State private var showCoinOverlay = false
+    @State private var isContinueDisabled = false
+
+    private func handleTutorialContinue() {
+        guard !isContinueDisabled else { return }
+        isContinueDisabled = true
+
+        if lastAwardedCoins > 0 {
+            // 1) show the animation first
+            showCoinOverlay = true
+        } else {
+            // no coins → go straight to next level
+            goToNextTutorialLevel()
+        }
+    }
+
+    // Called after the animation completes
+    private func goToNextTutorialLevel() {
+        // whatever you currently do in `dismiss()` to progress
+        // e.g., advance tutorial index, start next level session, close sheet, etc.
+        dismiss()
+    }
+
 
     var body: some View {
         ZStack {
@@ -55,7 +80,7 @@ struct TutorialWorldView: View {
             switch step {
             case .intro:
                 IntroLesson(onContinue: { step = .level1 })
-
+                
             case .level1:
                 TutorialLevelScreen(
                     title: "\(world.name) – Level 1",
@@ -77,16 +102,23 @@ struct TutorialWorldView: View {
                     // 2nd tile placed → advance to step 3
                     onSecondPlacement: { l1Step = .promptBoost }
                 )
-
+                
             case .level1Win:
                 WinSheet(
-                    message: lastAwardedCoins > 0
-                        ? "You've got it! Collect 3 coins!\nMove on to Level 2"
-                        : "Move on to Level 2",
-                    primary: ("Continue", { step = .level2 }),
-                    secondary: ("Quit", { dismiss() })
+                    message: lastAwardedCoins > 0 ? "" : "",
+                    primary: ("Continue", {
+                        if lastAwardedCoins > 0 {
+                            showCoinOverlay = true      // ← show animation
+                            // do NOT change `step` here
+                        } else {
+                            step = .level2              // no coins → go straight
+                        }
+                    }),
+                    secondary: nil
                 )
-
+                
+                
+                
             case .level2:
                 TutorialLevelScreen(
                     title: "\(world.name) – Level 2",
@@ -105,29 +137,43 @@ struct TutorialWorldView: View {
                         //print("tutorial won triggered")
                         step = .level2Win
                         UserDefaults.standard.set(true, forKey: "tutorial.finished.once")
-//                        ToastCenter.shared.show(
-//                            text: "Achievement unlocked — Collect 3 coins →",
-//                            duration: 2.5,
-//                            onTap: {
-//                                // optional: navigate to the achievements screen
-//                                // navigateToIntroAchievements = true
-//                            }
-//                        )
-
+                        
                     }
                 )
-
+                
             case .level2Win:
                 WinSheet(
-                    message: lastAwardedCoins > 0
-                        ? "You've got it! Collect 3 coins!"
-                        : "",
-                    primary: ("Continue", { dismiss() }),
+                    message: lastAwardedCoins > 0 ? "" : "",
+                    primary: ("Continue", {
+                        if lastAwardedCoins > 0 {
+                            showCoinOverlay = true    // overlay will dismiss to Worlds
+                        } else {
+                            dismiss()                 // no reward → go straight back
+                        }
+                    }),
                     secondary: nil
                 )
             }
         }
         .navigationBarBackButtonHidden(true) //hides the system back button
+        
+        // coin lottie animation overlay
+        .overlay {
+            if showCoinOverlay {
+                CoinRewardOverlay(
+                    isPresented: $showCoinOverlay,
+                    amount: lastAwardedCoins
+                ) {
+                    // After the coin animation finishes…
+                    if step == .level1Win {
+                        step = .level2            // go to Tutorial Level 2
+                    } else if step == .level2Win {
+                        dismiss()                 // pop back to Worlds
+                    }
+                }
+            }
+        }
+
 
         // ⬇️ Instruction Callout Text (L1) + L2 hint
         .overlay(alignment: .bottomTrailing) {
@@ -391,7 +437,7 @@ private struct WinSheet: View {
         ZStack {
             Color.black.opacity(0.25).ignoresSafeArea()
             VStack(spacing: 14) {
-                Text("You got it!").font(.title).bold()
+                Text("Well done!").font(.title).bold()
                 Text(message).multilineTextAlignment(.center).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     if let secondary = secondary {

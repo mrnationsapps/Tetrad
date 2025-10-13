@@ -79,7 +79,7 @@ struct ContentView: View {
 
                 // Centered popup
                 VStack(spacing: 12) {
-                    Text("You got it!")
+                    Text("Well done!")
                         .font(.title2).bold()
 
                     Button("Copy Win Info") {
@@ -223,7 +223,7 @@ struct ContentView: View {
 
         private func useSmartBoost() {
             guard boosts.remaining > 0 else {
-                errorText = "No Boosts left today."
+                errorText = "No Boosts left."
                 return
             }
 
@@ -426,7 +426,7 @@ struct ContentView: View {
             HStack {
                 Spacer()
                 Text("Moves: \(game.moveCount)").bold()
-                Text("Streak: \(game.streak)")
+                //Text("Streak: \(game.streak)")
             }
         }
     }

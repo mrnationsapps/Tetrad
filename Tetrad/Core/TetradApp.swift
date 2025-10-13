@@ -14,6 +14,7 @@ struct TetradApp: App {
 
     var body: some Scene {
         WindowGroup {
+            
             RootView()
                 // Core environment objects
                 .environmentObject(game)

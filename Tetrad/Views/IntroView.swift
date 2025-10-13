@@ -12,23 +12,25 @@ struct IntroView: View {
     // Data
     @State private var achievements: [Achievement] = Achievement.all
 
-    // Reward FX
-    @State private var showRewardFX = false
-    @State private var rewardCoins: Int = 0
+    // Reward FX (Lottie)
+    @State private var showCoinOverlay = false
+    @State private var lastAwardedCoins = 0
+
+    // Toast gate
     @State private var didShowRewardToastThisSession = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.softSandSat.ignoresSafeArea()
-                
+
                 // Main content
                 VStack(spacing: 20) {
                     header
                     achievementsSection
                 }
 
-                // Overlay layer (reward)
+                // Lottie coin overlay
                 rewardOverlayLayer
             }
             .safeAreaInset(edge: .bottom) { bottomCTA }
@@ -41,7 +43,6 @@ struct IntroView: View {
                     .environmentObject(game)
             }
         }
-        
         .onAppear {
             achievements = Achievement.all
 
@@ -58,7 +59,6 @@ struct IntroView: View {
             }
         }
     }
-
 }
 
 // MARK: - Chunks
@@ -95,8 +95,11 @@ private extension IntroView {
                             achievement: ach,
                             isUnlocked: ach.isUnlocked(using: game),
                             onClaimed: { coins in
-                                rewardCoins = coins
-                                showRewardFX = true
+                                // Credit immediately, then play the coin overlay
+                                guard coins > 0 else { return }
+                                levels.addCoins(coins)
+                                lastAwardedCoins = coins
+                                showCoinOverlay = true
                             }
                         )
                         .environmentObject(levels)
@@ -152,22 +155,14 @@ private extension IntroView {
 
     @ViewBuilder
     var rewardOverlayLayer: some View {
-        if showRewardFX {
-            RewardOverlay(
-                title: "Achievement Reward!",
-                subtitle: nil,
-                amount: rewardCoins,
-                showAura: true,
-                primaryTitle: "Collect",
-                primaryAction: {
-                    levels.addCoins(rewardCoins)
-                },
-                secondaryTitle: "Close",
-                secondaryAction: nil,
-                onDismiss: {
-                    showRewardFX = false
-                }
-            )
+        if showCoinOverlay {
+            CoinRewardOverlay(
+                isPresented: $showCoinOverlay,
+                amount: lastAwardedCoins
+            ) {
+                // Optional: any follow-up after the Lottie finishes
+                // e.g., ToastCenter.shared.show("Coins added to wallet")
+            }
             .transition(.opacity)
             .zIndex(50)
         }
@@ -231,9 +226,6 @@ struct AchievementRow: View {
     private func rowCore(showCollectLabel: Bool) -> some View {
         HStack(spacing: 12) {
             // LEFT ICON:
-            // - claimed: green checkmark
-            // - locked:  gray lock
-            // - claimable: nothing (text shifts left)
             if claimed {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 18, weight: .bold))
@@ -250,7 +242,7 @@ struct AchievementRow: View {
                     .accessibilityHidden(true)
             }
 
-            // TITLE + SUBTITLE (shifts left when no left icon)
+            // TITLE + SUBTITLE
             VStack(alignment: .leading, spacing: 2) {
                 Text(achievement.title)
                     .font(.subheadline.bold())
@@ -264,7 +256,7 @@ struct AchievementRow: View {
 
             Spacer(minLength: 8)
 
-            // RIGHT SIDE: full-height divider + “Collect!” label only if claimable
+            // RIGHT SIDE: divider + “Collect!” when claimable
             if showCollectLabel {
                 ZStack(alignment: .leading) {
                     Rectangle()
@@ -278,7 +270,6 @@ struct AchievementRow: View {
                         .padding(.vertical, 6)
                         .frame(minWidth: 64, alignment: .trailing)
                 }
-                // make the divider stretch full height of the row
                 .overlay(alignment: .leading) {
                     GeometryReader { gr in
                         Rectangle()
@@ -293,8 +284,3 @@ struct AchievementRow: View {
         .contentShape(Rectangle())
     }
 }
-
-
-
-
-

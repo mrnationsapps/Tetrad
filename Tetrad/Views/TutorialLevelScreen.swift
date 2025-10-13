@@ -135,7 +135,8 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 				// HUD (top-right)
 				HStack {
 					Spacer()
-					Text("Moves: \(model.moves)    Streak: \(streak)")
+					//Text("Moves: \(model.moves)    Streak: \(streak)")
+					Text("Moves: \(model.moves)")
 						.font(.subheadline)
 						.foregroundStyle(.secondary)
 				}

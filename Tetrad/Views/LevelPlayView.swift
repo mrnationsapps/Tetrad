@@ -6,7 +6,7 @@ struct LevelPlayView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
-    @EnvironmentObject var toast: ToastCenter
+    // @EnvironmentObject var toast: ToastCenter   // ← not used anymore
 
     let world: World
 
@@ -16,6 +16,9 @@ struct LevelPlayView: View {
     @State private var par: Int = 0
     @State private var navigateToAchievements = false
 
+    // 🎬 Coin reward flow
+    @State private var showCoinOverlay = false
+    @State private var pendingRewardCoins = 0
 
     // Banner state
     @State private var showWorldBanner = false
@@ -26,14 +29,14 @@ struct LevelPlayView: View {
     @State private var showInsufficientCoins = false
     @State private var isGenerating = false
     @State private var walletTargetGlobal: CGPoint? = nil
-    @State private var rewardCount: Double = 0
+    // @State private var rewardCount: Double = 0   // no longer used
     @State private var coinFly = false
 
     private func handleBack() {
         game.persistAllSafe()   // ensure snapshot is written
         dismiss()
     }
-    
+
     // MARK: - Main Body
     var body: some View {
         ZStack {
@@ -41,19 +44,12 @@ struct LevelPlayView: View {
 
             boardLayer
                 .modifier(FreezeAnimations(active: showWorldBanner)) // <- board never shifts
-
                 .overlay(alignment: .center) { auraOverlay }   // UNDER banner
                 .overlay(alignment: .center) { bannerOverlay } // OVER aura
-            
                 .onDisappear {
                     game.persistAllSafe()   // saves achievement totals + current run snapshot
                 }
-
         }
-        // 1) particle aura
-        //.overlay(auraOverlay, alignment: .center)
-
-        // 2) your existing animations / toolbar / lifecycle
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
         .navigationBarBackButtonHidden(true)
         .toolbar { levelToolbar }
@@ -70,48 +66,75 @@ struct LevelPlayView: View {
             triggerWorldBanner()
         }
 
-        // Solve handling (delay if banner also firing)
+        // Solve handling: compute reward, then show the simple win overlay.
         .onChange(of: game.solved) { _, isSolved in
             guard isSolved && game.isLevelMode else { return }
 
-            let fireWinAndToast = {
+            let fireWin = {
+                // Compute and store the pending reward (don’t add coins yet).
+                let payout = levels.rewardCoins(for: game.moveCount, par: par)
+                pendingRewardCoins = max(0, payout.total)
+
                 withAnimation(.spring()) { showWin = true }
 
-                // 🔔 If any new achievements are now unlocked but unclaimed, show a toast
-                let newlyUnclaimed = Achievement.unclaimed(using: game)
-                if !newlyUnclaimed.isEmpty {
-                    toast.showAchievementUnlock(count: newlyUnclaimed.count) {
-                    }
-                }
-
+                // (Toast removed)
+                // let newlyUnclaimed = Achievement.unclaimed(using: game)
+                // if !newlyUnclaimed.isEmpty { toast.showAchievementUnlock(count: newlyUnclaimed.count) { } }
             }
 
             if showWorldBanner || pendingWinDelay {
                 pendingWinDelay = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     pendingWinDelay = false
-                    fireWinAndToast()
+                    fireWin()
                 }
             } else {
-                fireWinAndToast()
+                fireWin()
             }
         }
 
-
         .overlay(generatingOverlay)
 
-        // 3) win overlay (stays)
+        // Simple win overlay (no coin value, just Continue)
         .overlay(winOverlay)
-        
+
+        // 🎁 Coin animation overlay (credits coins, then advances/ends)
+        .overlay {
+            if showCoinOverlay {
+                CoinRewardOverlay(
+                    isPresented: $showCoinOverlay,
+                    amount: pendingRewardCoins
+                ) {
+                    // 1) Credit coins exactly once
+                    if pendingRewardCoins > 0 {
+                        levels.addCoins(pendingRewardCoins)
+                        pendingRewardCoins = 0
+                    }
+
+                    // 2) Close the win UI
+                    showWin = false
+
+                    // 3) Advance to next level (or exit if none)
+                    if levels.hasNextLevel(for: world) {
+                        levels.advance(from: world)
+                        startNewSession()
+                    } else {
+                        dismiss()
+                    }
+                }
+                .zIndex(120)
+            }
+        }
+
         .alert("Not enough coins", isPresented: $showInsufficientCoins) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("You don't have enough coins for that purchase.")
         }
-        
+
         .onPreferenceChange(WalletTargetKey.self) { walletTargetGlobal = $0 }
     }
-    
+
     @ViewBuilder
     private var generatingOverlay: some View {
         if isGenerating {
@@ -134,29 +157,21 @@ struct LevelPlayView: View {
     }
 
     private var effectiveBoostsRemaining: Int {
-        // Use your real counter — pick the one that compiles:
-        // return game.availableBoostsCount
-        // return game.boostsRemaining
         return boosts.remaining
     }
 
-    // Gate for the Reveal button
     private var canUseBoost: Bool {
         effectiveBoostsRemaining > 0 && !showWin && !showWorldBanner
     }
 
-    // Call when a boost is successfully consumed
     private func onBoostConsumed() {
         if boostTest > 0 {
             boostTest -= 1
         } else {
-            // If you have a real store, uncomment ONE of these:
             // _ = boosts.useOne()
-            // _ = game.boosts.useOne()
         }
     }
 
-    // Tile UI used in the panel
     @ViewBuilder
     private func boostTile(icon: String, title: String, material: Material) -> some View {
         VStack(spacing: 8) {
@@ -175,8 +190,7 @@ struct LevelPlayView: View {
         }
     }
 
-    
-    // MARK: - Layers (kept small to help the type-checker)
+    // MARK: - Layers
 
     @ViewBuilder private var boardLayer: some View {
         ContentView(
@@ -184,7 +198,6 @@ struct LevelPlayView: View {
             enableDailyWinUI: false,
             showHeader: false
         )
-
     }
 
     @ViewBuilder
@@ -194,7 +207,7 @@ struct LevelPlayView: View {
                 word: word.uppercased(),
                 gradient: worldGradient(for: world)
             )
-            .fixedSize() // don’t consume layout
+            .fixedSize()
             .background(
                 GeometryReader { g in
                     Color.clear
@@ -211,7 +224,6 @@ struct LevelPlayView: View {
     @ViewBuilder
     private var auraOverlay: some View {
         if showWorldBanner {
-            // Fallback size so you see particles even before bannerSize arrives
             let w = (bannerSize == .zero ? 260 : bannerSize.width)  + 100
             let h = (bannerSize == .zero ?  90 : bannerSize.height) + 100
 
@@ -219,21 +231,18 @@ struct LevelPlayView: View {
                 .frame(width: w, height: h)
                 .opacity(0.9)
                 .allowsHitTesting(false)
-                .zIndex(9) // under the banner
-                // simple fade; doesn’t affect layout
+                .zIndex(9)
                 .transition(.opacity)
         }
     }
 
     @ToolbarContentBuilder private var levelToolbar: some ToolbarContent {
-
         ToolbarItem(placement: .navigationBarTrailing) {
             Text("\(world.name) | L\(levels.levelIndex(for: world) + 1)")
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .tracking(1.5)
         }
-
     }
 
     @ViewBuilder private var winOverlay: some View {
@@ -244,76 +253,42 @@ struct LevelPlayView: View {
                     .ignoresSafeArea()
                     .transition(.opacity)
 
-                // 🎉 Confetti aura (behind the panel)
+                // Confetti aura (behind the panel)
                 ParticleAura()
                     .opacity(0.9)
                     .allowsHitTesting(false)
 
-                // Panel
-                VStack(spacing: 14) {
+                // Panel: simple headline + Continue
+                VStack(spacing: 18) {
                     Text("Level Complete!")
                         .font(.title).bold()
 
-                    let payout = levels.rewardCoins(for: game.moveCount, par: par)
-
-                    // Reward row with counting number
-                    HStack(spacing: 8) {
-                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-                        Text("Reward:").font(.headline)
-                        CountUpLabel(value: rewardCount)
-                            .foregroundStyle(.primary)
-                        Text("coins")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 2)
-                    .onAppear {
-                        // Award once, then animate the number
-                        awardCoinsOnce(payout.total)
-                        rewardCount = 0
-                        withAnimation(.easeOut(duration: 1.0)) {
-                            rewardCount = Double(payout.total)
-                        }
-                        #if os(iOS)
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        #endif
-                    }
-
-                    // Continue / Next
                     let hasNext = levels.hasNextLevel(for: world)
 
-                    if hasNext {
-                        HStack(spacing: 10) {
-                            Button {
-                                levels.advance(from: world)
-                                showWin = false
-                                rewardCount = 0
-                                startNewSession()
-                            } label: {
-                                Text("Continue").font(.headline).frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(SoftRaisedPillStyle(height: 48))
+                    Button {
+                        // 1) Hide the win sheet so it won't sit behind the Lottie
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showWin = false
                         }
-                    } else {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Text("Continue").font(.headline).frame(maxWidth: .infinity)
+                        // 2) Present the coin overlay on next tick
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                            showCoinOverlay = true
                         }
-                        .buttonStyle(SoftRaisedPillStyle(height: 48))
+                    } label: {
+                        Text("Continue")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(SoftRaisedPillStyle(height: 48))
+                    .accessibilityLabel(Text(hasNext ? "Continue to next level" : "Continue"))
                 }
                 .padding(20)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .padding(.horizontal, 24)
                 .transition(.scale.combined(with: .opacity))
             }
-            .onDisappear {
-                rewardCount = 0
-            }
         }
     }
-
 
 
     // MARK: - Helpers
@@ -322,7 +297,7 @@ struct LevelPlayView: View {
         let active: Bool
         func body(content: Content) -> some View {
             content.transaction { tx in
-                if active { tx.animation = nil }   // disable implicit animations locally
+                if active { tx.animation = nil }
             }
         }
     }
@@ -342,7 +317,7 @@ struct LevelPlayView: View {
     private func simulateIAPPurchase(coins: Int) {
         levels.addCoins(coins)
     }
-    
+
     private func worldIndexK() -> Int? {
         let rows = game.worldProtectedCoords.map(\.row)
         guard !rows.isEmpty else { return nil }
@@ -351,12 +326,11 @@ struct LevelPlayView: View {
     }
 
     private func startNewSession() {
-        
-        levels.loadProgressIfNeeded() // make sure levelIndex is loaded
+        levels.loadProgressIfNeeded()
 
         let idx  = levels.levelIndex(for: world)
         par      = levels.levelPar(for: world, levelIndex: idx)
-        let seed = levels.seed(for: world, levelIndex: idx)   // UInt64
+        let seed = levels.seed(for: world, levelIndex: idx)
 
         print("▶️ Level entry — world=\(world.id) idx=\(idx) seed=\(seed)")
 
@@ -369,19 +343,15 @@ struct LevelPlayView: View {
 
         isGenerating = true
         Task { @MainActor in
-            await Task.yield() // let the loading overlay render
-
-            // Always route through startLevelRun; it will restore if a snapshot exists.
+            await Task.yield()
             game.startLevelRun(
                 seed: seed,
                 dictionaryID: world.dictionaryID,
                 resumeIfAvailable: true
             )
-
             isGenerating = false
         }
     }
-
 
     private func awardCoinsOnce(_ amount: Int) {
         guard !didAwardCoins else { return }
@@ -389,10 +359,8 @@ struct LevelPlayView: View {
         if amount > 0 {
             levels.addCoins(amount)
         }
-        
     }
 
-    /// Left → center (show), hold ~2s, right (hide)
     private func triggerWorldBanner() {
         guard !bannerWasShown else { return }
         bannerWasShown = true
@@ -467,7 +435,6 @@ private struct WorldWordBanner: View {
             .minimumScaleFactor(0.8)
 
         VStack(spacing: 8) {
-            // Fixed heading
             Text("World Word Found!")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .foregroundStyle(.black)
@@ -487,7 +454,6 @@ private struct WorldWordBanner: View {
                 .overlay {
                     GeometryReader { geo in
                         let w = geo.size.width
-                        let h = geo.size.height
                         let band = max(56, w * 0.35)
 
                         Capsule()
@@ -497,7 +463,7 @@ private struct WorldWordBanner: View {
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
-                            .frame(width: band, height: h + 8)
+                            .frame(width: band, height: geo.size.height + 8)
                             .rotationEffect(.degrees(24))
                             .offset(x: runSheen ? w + band : -band)
                             .allowsHitTesting(false)
@@ -514,7 +480,6 @@ private struct WorldWordBanner: View {
         }
     }
 }
-
 
 private struct CountUpLabel: View, Animatable {
     var value: Double
