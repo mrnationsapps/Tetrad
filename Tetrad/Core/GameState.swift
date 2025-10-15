@@ -48,6 +48,9 @@ final class GameState: ObservableObject {
     private var lastSmartBoostCoord: BoardCoord? = nil
     private var solution: [String]? = nil                    // in-memory (rows)
 
+    // Active Level slot key (e.g., "level:food:L3:S12345")
+    var levelSlotKey: String?
+    
     // MARK: - Lifecycle
     init() {}
 
@@ -73,9 +76,12 @@ final class GameState: ObservableObject {
     /// Start a specific Level (optionally restore prior snapshot)
     func startLevelRun(seed: UInt64, dictionaryID: String, resumeIfAvailable: Bool = true) {
         startRun(mode: .level)
-        startLevelSession(seed: seed, dictionaryID: dictionaryID)  // <— expects UInt64
-        if resumeIfAvailable {
-            restoreLevelSnapshotIfAvailable()
+        startLevelSession(seed: seed, dictionaryID: dictionaryID) // builds and persists fresh snapshot
+        
+        if resumeIfAvailable, restoreLevelSnapshotIfAvailable() {
+            return            // restored prior placements; don't overwrite them
+        } else {
+            persistProgressSnapshot()   // first-time baseline
         }
     }
 
@@ -135,7 +141,8 @@ final class GameState: ObservableObject {
     }
 
     private func restoreRunStateOrStartFresh(for todayKey: String) {
-        if let run = Persistence.loadRunState(), run.lastPlayedDayUTC == todayKey {
+        if let run = Persistence.loadRunState(forKey: RunKey.daily(dateUTC: todayKey)),
+           run.lastPlayedDayUTC == todayKey {
             moveCount = run.moves
             solved = run.solvedToday
             streak = run.streak
@@ -531,51 +538,8 @@ final class GameState: ObservableObject {
         for r in 0..<4 { coords.insert(.init(row: r, col: wIndex)) }
         self.worldProtectedCoords = coords
 
-        // ⬇️ Try to RESUME this level from a saved snapshot (if identity matches)
-        if let id = self.identity,
-           var run = Persistence.loadRunState(),
-           run.lastPlayedDayUTC == id.dayUTC {
-
-            // Restore counters
-            self.moveCount = run.moves
-            self.solved    = run.solvedToday
-
-            // Reset board & return all tiles to bag
-            self.board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
-            for i in tiles.indices {
-                var t = tiles[i]
-                t.location = .bag
-                t.hasBeenPlacedOnce = false
-                tiles[i] = t
-            }
-
-            // Re-apply placements (consume matching letters from bag)
-            for p in run.placements {
-                if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
-                    var t = tiles[idx]
-                    t.hasBeenPlacedOnce = true
-                    let bc = BoardCoord(row: p.row, col: p.col)
-                    t.location = .board(bc)
-                    tiles[idx] = t
-                    board[p.row][p.col] = t.id
-                }
-            }
-
-            // Rebuild World-Word locks for correctly placed protected cells
-            self.worldLockedTileIDs.removeAll()
-            for coord in self.worldProtectedCoords {
-                if let t = tile(at: coord), isCorrect(t.letter, at: coord) {
-                    self.worldLockedTileIDs.insert(t.id)
-                }
-            }
-            checkWorldWordComplete()
-
-            persistProgressSnapshot() // keep snapshot consistent
-            return
-        }
-
-        // Fresh start (no snapshot found)
-        persistProgressSnapshot()
+        // ❗️No restore here anymore — session build only.
+        //persistProgressSnapshot() // keep snapshot consistent for fresh runs
     }
 
     
@@ -623,66 +587,74 @@ final class GameState: ObservableObject {
 
     @MainActor
     private func restoreLevelSnapshotIfAvailable() -> Bool {
-        // 0) Read identity + run
         guard let id = identity else {
             print("🧪 RESTORE miss — expected=<no identity> found=nil")
             return false
         }
-        guard let loaded = Persistence.loadRunState() else {
-            print("🧪 RESTORE miss — expected=\(id.dayUTC) found=nil")
-            return false
-        }
-        // 1) Compare identities and log outcome
-        if loaded.lastPlayedDayUTC != id.dayUTC {
-            print("🧪 RESTORE miss — expected=\(id.dayUTC) found=\(loaded.lastPlayedDayUTC)")
-            return false
-        }
-        print("✅ RESTORE hit — id=\(id.dayUTC) placements=\(loaded.placements.count) moves=\(loaded.moves)")
 
-        // 2) Proceed with restore using `run`
-        var run = loaded
-
-        // Restore counters/flags
-        moveCount = run.moves
-        solved    = run.solvedToday
-
-        // Reset board & return all tiles to the bag
-        board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
-        for i in tiles.indices {
-            var t = tiles[i]
-            t.location = .bag
-            t.hasBeenPlacedOnce = false
-            tiles[i] = t
-        }
-
-        // Re-apply placements (match by letter from bag pool)
-        for p in run.placements {
-            if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
-                var t = tiles[idx]
-                t.hasBeenPlacedOnce = true
-                let bc = BoardCoord(row: p.row, col: p.col)
-                t.location = .board(bc)
-                tiles[idx] = t
-                board[p.row][p.col] = t.id
+        // Level mode → use keyed slot; Daily handled elsewhere
+        if isLevelMode {
+            guard let key = levelSlotKey else {
+                print("🧪 RESTORE miss — no levelSlotKey set")
+                return false
             }
-        }
-
-        // Rebuild World-Word locks for correctly placed protected cells
-        worldLockedTileIDs.removeAll()
-        for coord in worldProtectedCoords {
-            if let t = tile(at: coord), isCorrect(t.letter, at: coord) {
-                worldLockedTileIDs.insert(t.id)
+            guard var run = Persistence.loadRunState(forKey: key) else {
+                print("🧪 RESTORE miss — expected=\(key) found=nil")
+                return false
             }
-        }
-        checkWorldWordComplete()
+            guard run.lastPlayedDayUTC == id.dayUTC else {
+                print("🧪 RESTORE miss — identity mismatch expected=\(id.dayUTC) found=\(run.lastPlayedDayUTC)")
+                return false
+            }
 
-        return true
+            print("✅ RESTORE hit — key=\(key) placements=\(run.placements.count) moves=\(run.moves)")
+
+            // Restore counters/flags
+            moveCount = run.moves
+            solved    = run.solvedToday
+
+            // Reset board & return all tiles to the bag
+            board = Array(repeating: Array(repeating: nil, count: 4), count: 4)
+            for i in tiles.indices {
+                var t = tiles[i]
+                t.location = .bag
+                t.hasBeenPlacedOnce = false
+                tiles[i] = t
+            }
+
+            // Re-apply placements (match by letter from bag pool)
+            for p in run.placements {
+                if let idx = tiles.firstIndex(where: { $0.letter == p.letter && $0.location == .bag }) {
+                    var t = tiles[idx]
+                    t.hasBeenPlacedOnce = true
+                    let bc = BoardCoord(row: p.row, col: p.col)
+                    t.location = .board(bc)
+                    tiles[idx] = t
+                    board[p.row][p.col] = t.id
+                }
+            }
+
+            // Rebuild World-Word locks for correctly placed protected cells
+            worldLockedTileIDs.removeAll()
+            for coord in worldProtectedCoords {
+                if let t = tile(at: coord), isCorrect(t.letter, at: coord) {
+                    worldLockedTileIDs.insert(t.id)
+                }
+            }
+            checkWorldWordComplete()
+            return true
+        }
+
+        // Not level mode → let your Daily path handle separately
+        print("🧪 RESTORE bypass — not level mode")
+        return false
     }
+
 
     
     private func persistProgressSnapshot() {
-        
         guard let id = identity else { return }
+
         var placements: [TilePlacement] = []
         for r in 0..<4 {
             for c in 0..<4 {
@@ -691,30 +663,77 @@ final class GameState: ObservableObject {
                 }
             }
         }
-        
-        print("📦 SAVE — id=\(identity?.dayUTC ?? "nil") placements=\(placements.count) moves=\(moveCount) solved=\(solved)")
 
-        let run = RunState(moves: moveCount,
-                           solvedToday: solved,
-                           placements: placements,
-                           streak: streak,
-                           lastPlayedDayUTC: id.dayUTC)
+        print("📦 SAVE — id=\(id.dayUTC) placements=\(placements.count) moves=\(moveCount) solved=\(solved)")
+
+        let run = RunState(
+            moves: moveCount,
+            solvedToday: solved,
+            placements: placements,
+            streak: streak,
+            lastPlayedDayUTC: id.dayUTC
+        )
+
+        // Identity can stay as your “current run” marker
         Persistence.saveIdentity(id)
-        Persistence.saveRunState(run)
-        persistBoostLocks() // keep daily boost locks in sync
+
+        if isLevelMode {
+            if let key = levelSlotKey {
+                Persistence.saveRunState(run, forKey: key)   // ✅ per-world/level slot
+            } else {
+                // Fallback (shouldn’t happen if LevelPlayView sets the key)
+                Persistence.saveRunState(run)
+            }
+        } else {
+            // Daily (from Step 2)
+            let dailyKey = RunKey.daily(dateUTC: id.dayUTC)
+            Persistence.saveRunState(run, forKey: dailyKey)
+        }
+
+        persistBoostLocks()
     }
+
+
 
     private func registerSolvedAndPersist() {
         guard let id = identity else { return }
-        if var run = Persistence.loadRunState(), !run.solvedToday {
-            run.solvedToday = true
-            run.moves = moveCount
-            run.streak = streak
-            run.lastPlayedDayUTC = id.dayUTC
-            Persistence.saveRunState(run)
+
+        var alreadySolved = self.solved
+
+        if isLevelMode {
+            if let key = levelSlotKey,
+               var run = Persistence.loadRunState(forKey: key),
+               run.lastPlayedDayUTC == id.dayUTC {
+                if !run.solvedToday {
+                    run.solvedToday = true
+                    run.moves = moveCount
+                    run.streak = streak
+                    Persistence.saveRunState(run, forKey: key)
+                }
+                alreadySolved = alreadySolved || run.solvedToday
+            }
+        } else {
+            let key = RunKey.daily(dateUTC: id.dayUTC)
+            if var run = Persistence.loadRunState(forKey: key),
+               run.lastPlayedDayUTC == id.dayUTC {
+                if !run.solvedToday {
+                    run.solvedToday = true
+                    run.moves = moveCount
+                    run.streak = streak
+                    Persistence.saveRunState(run, forKey: key)
+                }
+                alreadySolved = alreadySolved || run.solvedToday
+            }
+        }
+
+        if !alreadySolved {
+            self.solved = true
         }
         persistProgressSnapshot()
     }
+
+
+
 }
 
 

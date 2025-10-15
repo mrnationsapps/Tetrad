@@ -334,7 +334,10 @@ struct LevelPlayView: View {
 
         print("▶️ Level entry — world=\(world.id) idx=\(idx) seed=\(seed)")
 
-        // Reset view flags
+        // 🔑 Tell GameState which slot to use for this world+level
+        game.levelSlotKey = RunKey.level(worldID: world.id, levelIndex: idx, seed: seed)
+
+        // Reset view flags...
         showWin = false
         didAwardCoins = false
         bannerWasShown = false
@@ -352,6 +355,7 @@ struct LevelPlayView: View {
             isGenerating = false
         }
     }
+
 
     private func awardCoinsOnce(_ amount: Int) {
         guard !didAwardCoins else { return }

@@ -59,32 +59,72 @@ struct RunState: Codable, Equatable {
 
 // MARK: - Keys & helpers
 
+enum RunKey {
+    static func daily(dateUTC: String) -> String { "daily:\(dateUTC)" }
+    static func level(worldID: String, levelIndex: Int, seed: UInt64) -> String {
+        // include seed so future dictionary changes don’t collide
+        "level:\(worldID):L\(levelIndex):S\(seed)"
+    }
+}
+
+
+
 enum PersistKeys {
     static let identity = "tetrad.identity.v1"
     static let runState = "tetrad.runState.v1"
 }
 
 enum Persistence {
+    // MARK: - Core JSON helpers
+
     static func save<T: Codable>(_ value: T, key: String) {
         let enc = JSONEncoder()
         if let data = try? enc.encode(value) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
+
     static func load<T: Codable>(key: String) -> T? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
     }
+
+    // MARK: - Single-slot (existing behavior)
+
     static func clearForNewDay() {
         UserDefaults.standard.removeObject(forKey: PersistKeys.identity)
         UserDefaults.standard.removeObject(forKey: PersistKeys.runState)
     }
+
     static func saveIdentity(_ v: PuzzleIdentity) { save(v, key: PersistKeys.identity) }
     static func loadIdentity() -> PuzzleIdentity? { load(key: PersistKeys.identity) }
 
     static func saveRunState(_ v: RunState) { save(v, key: PersistKeys.runState) }
     static func loadRunState() -> RunState? { load(key: PersistKeys.runState) }
+
+    // MARK: - Multi-slot (new): keyed run states
+
+    /// Prefix user defaults keys so they don't collide with anything else.
+    private static func namespaced(_ slotKey: String) -> String {
+        "tetrad_run.\(slotKey)"
+    }
+
+    /// Save a RunState for a specific slot key (e.g., "daily:2025-10-14" or "level:food:L3:S12345").
+    static func saveRunState(_ v: RunState, forKey slotKey: String) {
+        save(v, key: namespaced(slotKey))
+    }
+
+    /// Load a RunState for a specific slot key.
+    static func loadRunState(forKey slotKey: String) -> RunState? {
+        load(key: namespaced(slotKey))
+    }
+
+    /// Delete a RunState for a specific slot key (optional helper).
+    static func deleteRunState(forKey slotKey: String) {
+        UserDefaults.standard.removeObject(forKey: namespaced(slotKey))
+    }
 }
+
 
 func currentUTCDateKey(_ date: Date = Date()) -> String {
     var cal = Calendar(identifier: .gregorian)
