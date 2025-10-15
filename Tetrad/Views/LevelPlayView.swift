@@ -76,10 +76,6 @@ struct LevelPlayView: View {
                 pendingRewardCoins = max(0, payout.total)
 
                 withAnimation(.spring()) { showWin = true }
-
-                // (Toast removed)
-                // let newlyUnclaimed = Achievement.unclaimed(using: game)
-                // if !newlyUnclaimed.isEmpty { toast.showAchievementUnlock(count: newlyUnclaimed.count) { } }
             }
 
             if showWorldBanner || pendingWinDelay {
@@ -92,6 +88,7 @@ struct LevelPlayView: View {
                 fireWin()
             }
         }
+
 
         .overlay(generatingOverlay)
 

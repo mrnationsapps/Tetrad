@@ -157,7 +157,7 @@ struct ContentView: View {
                 }
             }
         }
-        .onAppear { showWinPopup = false }  // ensure clean state on re-entry
+        .onAppear { showWinPopup = false }  // ensure clean state on re-entry.
         
         .withFooterPanels(
             coins: levels.coins,
@@ -457,13 +457,13 @@ struct ContentView: View {
                 }
 
                 // Optional: share button floats inside the same region
-                if game.solved {
-                    Button("Copy Share Text") {
-                        UIPasteboard.general.string = game.shareString()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(12)
-                }
+//                if game.solved {
+//                    Button("Copy Share Text") {
+//                        UIPasteboard.general.string = game.shareString()
+//                    }
+//                    .buttonStyle(.borderedProminent)
+//                    .padding(12)
+//                }
             }
         }
         // Keep a stable height so bag/panel occupy identical vertical space
@@ -505,6 +505,13 @@ struct ContentView: View {
                 boardGap             = gap
                 boardOriginInStage   = geo.frame(in: .named("stage")).origin
                 boardRect            = geo.frame(in: .named("stage"))          // 👈 capture full rect
+                
+                // Re-show the win popup for today’s Daily if it’s already solved.
+                if !game.isLevelMode, game.solved {
+                    withAnimation(.spring()) {
+                        showWinPopup = true
+                    }
+                }
             }
             .onChange(of: geo.size) {
                 currentBoardCell     = cell
