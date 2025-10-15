@@ -16,8 +16,8 @@ struct IntroView: View {
     @State private var showCoinOverlay = false
     @State private var lastAwardedCoins = 0
 
-    // Toast gate
-    @State private var didShowRewardToastThisSession = false
+//    // Toast gate
+//    @State private var didShowRewardToastThisSession = false
 
     var body: some View {
         NavigationStack {
@@ -45,19 +45,9 @@ struct IntroView: View {
         }
         .onAppear {
             achievements = Achievement.all
-
-            // Only show once per app session
-            guard !didShowRewardToastThisSession else { return }
-
-            // Which unlocked achievements haven't been claimed yet?
-            let newlyUnclaimed = Achievement.unclaimed(using: game)
-            if !newlyUnclaimed.isEmpty {
-                didShowRewardToastThisSession = true
-                ToastCenter.shared.showAchievementUnlock(count: newlyUnclaimed.count) {
-                    // navigateToIntroAchievements = true   // if you wire this route up
-                }
-            }
+            // (Toast removed — no session-gated reward prompt)
         }
+
     }
 }
 

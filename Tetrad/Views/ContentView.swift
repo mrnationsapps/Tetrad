@@ -10,7 +10,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
-    @EnvironmentObject var toast: ToastCenter
+//    @EnvironmentObject var toast: ToastCenter
 
     var skipDailyBootstrap: Bool = false
     var par: Int? = nil
@@ -98,8 +98,8 @@ struct ContentView: View {
                 .transition(.scale.combined(with: .opacity))
             }
             
-            ToastHost()
-                .environmentObject(ToastCenter.shared)
+//            ToastHost()
+//                .environmentObject(ToastCenter.shared)
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
 
@@ -148,15 +148,12 @@ struct ContentView: View {
         // Only trigger Daily win popup when enabled
         .onChange(of: game.solved) { _, isSolved in
             guard enableDailyWinUI else { return }
-            if isSolved { withAnimation(.spring()) { showWinPopup = true }
-                
-                // ✅ After Daily solve → notify if any new unclaimed rewards exist
-                let newlyUnclaimed = Achievement.all.filter { $0.isUnlocked(using: game) && !$0.isClaimed() }
-                if !newlyUnclaimed.isEmpty {
-                    toast.showAchievementUnlock(count: newlyUnclaimed.count)
-                }
+            if isSolved {
+                withAnimation(.spring()) { showWinPopup = true }
+                // (Toast removed) — no additional UI here
             }
         }
+
         .onAppear { showWinPopup = false }  // ensure clean state on re-entry.
         
         .withFooterPanels(

@@ -271,12 +271,15 @@ extension LevelsService {
         saveProgress()
     }
 
-    // Deterministic seed
+    // Deterministic seed — unique per world + level index
     @MainActor
     func seed(for world: World, levelIndex: Int) -> UInt64 {
-        let base = Self.stableHash64(world.id)
-        return base &+ UInt64(levelIndex)
+        // Stable across installs/builds; different for each (world,id,level)
+        let s = "tetrad.level.v1|\(world.id)|L\(levelIndex)"
+        var rng = SeededRNG(seedString: s)
+        return rng.next()
     }
+
 
     // Stable 64-bit hash
     static func stableHash64(_ s: String) -> UInt64 {

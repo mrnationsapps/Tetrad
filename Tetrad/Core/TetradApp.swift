@@ -20,7 +20,7 @@ struct TetradApp: App {
                 .environmentObject(game)
                 .environmentObject(boosts)
                 .environmentObject(levels)
-                .environmentObject(ToastCenter.shared)
+//                .environmentObject(ToastCenter.shared)
 
                 // Debug-only flags
                 #if DEBUG
