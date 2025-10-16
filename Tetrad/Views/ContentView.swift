@@ -122,6 +122,7 @@ struct ContentView: View {
                     Text("TETRAD")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .tracking(1.5)
+                        .foregroundStyle(Color.black)
                 }
             }
         }
@@ -423,7 +424,7 @@ struct ContentView: View {
             HStack {
                 Spacer()
                 Text("Moves: \(game.moveCount)").bold()
-                //Text("Streak: \(game.streak)")
+                    .foregroundStyle(Color.black)
             }
         }
     }

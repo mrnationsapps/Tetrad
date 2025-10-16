@@ -777,6 +777,27 @@ final class GameState: ObservableObject {
 
 // MARK: - Smart Boost (auto, non-adjacent preference, avoids World Word cells)
 extension GameState {
+
+    /// Swap two board tiles in-place without touching the bag.
+    /// Assumes both coords are currently occupied.
+    private func swapBoardTiles(_ a: BoardCoord, _ b: BoardCoord) {
+        guard let idA = board[a.row][a.col], let idB = board[b.row][b.col] else { return }
+
+        // Swap board slots
+        board[a.row][a.col] = idB
+        board[b.row][b.col] = idA
+
+        // Update tile locations & mark as placed once
+        if let iA = tiles.firstIndex(where: { $0.id == idA }) {
+            tiles[iA].location = .board(b)
+            tiles[iA].hasBeenPlacedOnce = true
+        }
+        if let iB = tiles.firstIndex(where: { $0.id == idB }) {
+            tiles[iB].location = .board(a)
+            tiles[iB].hasBeenPlacedOnce = true
+        }
+    }
+
     @MainActor
     func applySmartBoost(movePenalty: Int) -> Bool {
         guard let solution = self.solution, solution.count == 4 else {
@@ -784,65 +805,180 @@ extension GameState {
             return false
         }
 
-        // Bag availability
+        // ---------- 1) BAG-BASED PLACEMENT (your current behavior) ----------
+        // Count letters in bag
         var bagCounts: [Character: Int] = [:]
         for t in tiles where t.location == .bag { bagCounts[t.letter, default: 0] += 1 }
 
-        // Candidates: not already correct, available in bag, and not in protected world cells
-        var candidates: [BoardCoord] = []
+        // Cells that the bag can fix directly (avoid world-protected)
+        var bagCandidates: [BoardCoord] = []
         for r in 0..<4 {
             let rowChars = Array(solution[r])
             for c in 0..<4 {
                 let coord = BoardCoord(row: r, col: c)
-                if worldProtectedCoords.contains(coord) { continue } // avoid World Word cells
+                if worldProtectedCoords.contains(coord) { continue }
                 let needed = rowChars[c]
                 if let existing = tile(at: coord), existing.letter == needed { continue }
                 guard let count = bagCounts[needed], count > 0 else { continue }
-                candidates.append(coord)
+                bagCandidates.append(coord)
             }
         }
-        guard !candidates.isEmpty else { return false }
 
-        // Prefer non-adjacent to last placement
-        let pool: [BoardCoord]
-        if let last = lastSmartBoostCoord {
-            let nonAdj = candidates.filter { abs($0.row - last.row) + abs($0.col - last.col) != 1 }
-            pool = nonAdj.isEmpty ? candidates : nonAdj
-        } else {
-            pool = candidates
-        }
-        guard let chosen = pool.randomElement() else { return false }
-
-        let needed = Array(solution[chosen.row])[chosen.col]
-
-        // Clear occupant (safety: do not dislodge a locked piece)
-        if let occ = tile(at: chosen) {
-            if boostedLockedTileIDs.contains(occ.id) || worldLockedTileIDs.contains(occ.id) { return false }
-            moveTileTo(occ, to: .bag, countAsMove: false)
+        // Prefer non-adjacent to last boost
+        func preferNonAdjacent(_ pool: [BoardCoord]) -> [BoardCoord] {
+            guard let last = lastSmartBoostCoord else { return pool }
+            let nonAdj = pool.filter { abs($0.row - last.row) + abs($0.col - last.col) != 1 }
+            return nonAdj.isEmpty ? pool : nonAdj
         }
 
-        guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
-            return false
+        if !bagCandidates.isEmpty {
+            let pool = preferNonAdjacent(bagCandidates)
+            guard let chosen = pool.randomElement() else { return false }
+            let needed = Array(solution[chosen.row])[chosen.col]
+
+            // Clear occupant (don’t dislodge locked pieces)
+            if let occ = tile(at: chosen) {
+                if boostedLockedTileIDs.contains(occ.id) || worldLockedTileIDs.contains(occ.id) { return false }
+                moveTileTo(occ, to: .bag, countAsMove: false)
+            }
+
+            // Place from bag
+            guard let bagIdx = tiles.firstIndex(where: { $0.location == .bag && $0.letter == needed }) else {
+                return false
+            }
+            var chosenTile = tiles[bagIdx]
+            chosenTile.hasBeenPlacedOnce = true
+            tiles[bagIdx] = chosenTile
+            moveTileTo(chosenTile, to: .board(chosen), countAsMove: false)
+
+            // Bookkeeping & locks
+            moveCount += movePenalty
+            lastSmartBoostCoord = chosen
+            boostedLockedTileIDs.insert(chosenTile.id)
+            boostedLockedCoords.insert(coordKey(chosen))
+            persistBoostLocks()
+
+            checkIfSolved()
+            persistProgressSnapshot()
+            return true
         }
 
-        var chosenTile = tiles[bagIdx]
-        chosenTile.hasBeenPlacedOnce = true
-        tiles[bagIdx] = chosenTile
-        moveTileTo(chosenTile, to: .board(chosen), countAsMove: false)
+        // ---------- 2) BOARD-SWAP FALLBACK (when bag can’t help) ----------
+        // Helpers
+        func isMovable(_ coord: BoardCoord) -> Bool {
+            guard let t = tile(at: coord) else { return false }
+            return !boostedLockedTileIDs.contains(t.id) && !worldLockedTileIDs.contains(t.id)
+        }
 
-        moveCount += movePenalty
-        lastSmartBoostCoord = chosen
+        // Find wrong target cells we’re allowed to fix (avoid world-protected)
+        var wrongTargets: [BoardCoord] = []
+        for r in 0..<4 {
+            let rowChars = Array(solution[r])
+            for c in 0..<4 {
+                let coord = BoardCoord(row: r, col: c)
+                if worldProtectedCoords.contains(coord) { continue }
+                guard let t = tile(at: coord) else { continue } // board must be filled
+                let needed = rowChars[c]
+                if t.letter != needed && isMovable(coord) {
+                    wrongTargets.append(coord)
+                }
+            }
+        }
 
-        // Lock the boosted tile and persist by coord (Daily)
-        boostedLockedTileIDs.insert(chosenTile.id)
-        boostedLockedCoords.insert(coordKey(chosen))
-        persistBoostLocks()
+        let swapTargets = preferNonAdjacent(wrongTargets)
 
-        checkIfSolved()
-        persistProgressSnapshot()
-        return true
+        // Optional heuristic: prefer swaps that also fix the source cell
+        func swapScore(source: BoardCoord, target: BoardCoord) -> Int {
+            // +1 if source tile will land correct at its new home
+            guard let tgtTile = tile(at: target) else { return 0 }
+            let srcNeeded = Array(solution[source.row])[source.col]
+            return (tgtTile.letter == srcNeeded) ? 1 : 0
+        }
+
+        for target in swapTargets.sorted(by: { a, b in
+            // Try higher scoring opportunities first (potentially fixes 2 cells)
+            let scoreA: Int = {
+                let neededA = Array(solution[a.row])[a.col]
+                var best = 0
+                for r in 0..<4 {
+                    for c in 0..<4 {
+                        let src = BoardCoord(row: r, col: c)
+                        if src == a { continue }
+                        if !isMovable(src) { continue }
+                        if let srcTile = tile(at: src), srcTile.letter == neededA {
+                            best = max(best, swapScore(source: src, target: a))
+                        }
+                    }
+                }
+                return best
+            }()
+            let scoreB: Int = {
+                let neededB = Array(solution[b.row])[b.col]
+                var best = 0
+                for r in 0..<4 {
+                    for c in 0..<4 {
+                        let src = BoardCoord(row: r, col: c)
+                        if src == b { continue }
+                        if !isMovable(src) { continue }
+                        if let srcTile = tile(at: src), srcTile.letter == neededB {
+                            best = max(best, swapScore(source: src, target: b))
+                        }
+                    }
+                }
+                return best
+            }()
+            return scoreA > scoreB
+        }) {
+            let needed = Array(solution[target.row])[target.col]
+
+            // Find a source on the board that holds the needed letter
+            var sourceCoord: BoardCoord?
+            for r in 0..<4 {
+                for c in 0..<4 {
+                    let src = BoardCoord(row: r, col: c)
+                    if src == target { continue }
+                    if !isMovable(src) { continue }
+                    if let srcTile = tile(at: src), srcTile.letter == needed {
+                        sourceCoord = src
+                        break
+                    }
+                }
+                if sourceCoord != nil { break }
+            }
+
+            guard let source = sourceCoord,
+                  let srcTile = tile(at: source),
+                  let tgtTile = tile(at: target) else {
+                continue
+            }
+
+            // Safety double-checks
+            if boostedLockedTileIDs.contains(srcTile.id) || worldLockedTileIDs.contains(srcTile.id) { continue }
+            if boostedLockedTileIDs.contains(tgtTile.id) || worldLockedTileIDs.contains(tgtTile.id) { continue }
+
+            // --- perform an atomic swap (no bag involved) ---
+            swapBoardTiles(source, target)
+
+            // Bookkeeping & lock the corrected target
+            moveCount += movePenalty
+            lastSmartBoostCoord = target
+            if let nowAtTargetID = board[target.row][target.col] {
+                boostedLockedTileIDs.insert(nowAtTargetID)
+            }
+            boostedLockedCoords.insert(coordKey(target))
+            persistBoostLocks()
+
+            checkIfSolved()
+            persistProgressSnapshot()
+            return true
+        }
+
+        // Still nothing we can fix
+        return false
     }
 }
+
+
 
 // MARK: - Boost lock persistence (by coord for Daily)
 extension GameState {

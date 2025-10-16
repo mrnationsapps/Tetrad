@@ -239,6 +239,7 @@ struct LevelPlayView: View {
                 .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .tracking(1.5)
+                .foregroundStyle(Color.black)
         }
     }
 

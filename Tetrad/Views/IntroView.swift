@@ -62,8 +62,8 @@ private extension IntroView {
 
             Text("Make 4 four-letter words, daily.")
                 .font(.headline)
-                .foregroundStyle(.secondary)
         }
+        .foregroundStyle(Color.black)
         .padding(.top, 28)
     }
 
@@ -75,8 +75,8 @@ private extension IntroView {
                 Spacer()
                 Text("\(unlockedCount())/\(achievements.count)")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
+            .foregroundStyle(Color.black)
 
             ScrollView {
                 LazyVStack(spacing: 12) {

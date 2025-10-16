@@ -363,19 +363,14 @@ private struct IntroLesson: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-                (Text("What's a Word Square?"))
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-
-                Text("A word square is a grid where column n is the same as row n.")
+                Text("In a word square, the first column is equal to the first row. The second column is equal to the second row, etc.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
 
                 StaticSquare3x3(rows: ["BIT","ICE","TEN"])
                     .padding(.top, 4)
 
-                Text("Notice how Row 1 = Column 1, Row 2 = Column 2, etc.")
+                Text("Both columns and rows spell the words BIT, ICE & TEN.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)

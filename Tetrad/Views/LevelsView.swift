@@ -65,6 +65,7 @@ struct LevelsView: View {
                     Text("TETRAD")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .tracking(2)
+                        .foregroundStyle(Color.black)
                 }
 
 
@@ -264,8 +265,25 @@ struct LevelsView: View {
     }
 }
 
+struct LevelBadge: View {
+    let level: Int
+    var body: some View {
+        Text("L\(level)")
+            .font(.caption.bold())
+            .monospacedDigit()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
+            .shadow(radius: 3, y: 2)
+            .accessibilityLabel("Level \(level)")
+    }
+}
+
 // MARK: - World Card
 private struct WorldCard: View {
+    @EnvironmentObject private var levels: LevelsService
+
     let world: World
     let selected: Bool
     let unlocked: Bool
@@ -273,52 +291,58 @@ private struct WorldCard: View {
     var onTap: (() -> Void)? = nil   // optional: when nil, no gesture is attached
 
     var body: some View {
-        let card = ZStack {
-            if let art = world.artName, UIImage(named: art) != nil {
-                Image(art).resizable().scaledToFill().clipped()
-            } else {
-                LinearGradient(
-                    colors: [.blue.opacity(0.35), .purple.opacity(0.35)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            }
-
-            VStack {
-                HStack {
-                    Spacer()
-                    if !unlocked {
-                        HStack(spacing: 6) {
-                            Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                            Text("\(world.unlockCost)").font(.footnote).bold()
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    }
+        let card =
+            ZStack {
+                if let art = world.artName, UIImage(named: art) != nil {
+                    Image(art).resizable().scaledToFill().clipped()
+                } else {
+                    LinearGradient(
+                        colors: [.blue.opacity(0.35), .purple.opacity(0.35)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
                 }
-                .padding(8)
 
-                Spacer()
+                VStack {
+                    HStack {
+                        Spacer()
+                        if !unlocked {
+                            HStack(spacing: 6) {
+                                Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+                                Text("\(world.unlockCost)").font(.footnote).bold()
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        }
+                    }
+                    .padding(8)
 
-                Text(world.name)
-                    .font(.headline).bold()
-                    .shadow(radius: 2)
-                    .padding(.bottom, 10)
+                    Spacer()
+
+                    Text(world.name)
+                        .font(.headline).bold()
+                        .shadow(radius: 2)
+                        .padding(.bottom, 10)
+                }
+                .foregroundStyle(.white)
+
+                if !unlocked {
+                    Color.black.opacity(0.35)
+                    Image(systemName: "lock.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(selected ? Color.accentColor : .clear, lineWidth: 3)
             }
-            .foregroundStyle(.white)
-
-            if !unlocked {
-                Color.black.opacity(0.35)
-                Image(systemName: "lock.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white.opacity(0.85))
+            // ⬇️ Level badge at top-left
+            .overlay(alignment: .topLeading) {
+                LevelBadge(level: levels.levelIndex(for: world) + 1)
+                    .padding(8)
             }
-
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(selected ? Color.accentColor : .clear, lineWidth: 3)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .softRaised(corner: 16, pressed: selected)
-        .contentShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .softRaised(corner: 16, pressed: selected)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
 
         Group {
             if let onTap {
