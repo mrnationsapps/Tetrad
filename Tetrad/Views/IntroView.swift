@@ -15,6 +15,7 @@ struct IntroView: View {
     // Reward FX (Lottie)
     @State private var showCoinOverlay = false
     @State private var lastAwardedCoins = 0
+    @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
 
 //    // Toast gate
 //    @State private var didShowRewardToastThisSession = false
@@ -124,24 +125,28 @@ private extension IntroView {
             }
             .buttonStyle(SoftRaisedPillStyle(height: 52))
 
-            Button {
-                game.startDailyRun()   // set mode = .daily and bootstrap today's run
-                navigateToGame = true  // then navigate
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "bolt.fill").imageScale(.medium)
-                    Text("Play Daily Puzzle").font(.title3).bold()
+            // ⬇️ Hide Daily until tutorial is completed
+            if tutorialCompleted {
+                Button {
+                    game.startDailyRun()
+                    navigateToGame = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.fill").imageScale(.medium)
+                        Text("Play Daily Puzzle").font(.title3).bold()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(.primary)
                 }
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(.primary)
+                .buttonStyle(SoftRaisedPillStyle(height: 52))
+                .padding(.bottom, 4)
             }
-            .buttonStyle(SoftRaisedPillStyle(height: 52))
-            .padding(.bottom, 4)
         }
         .padding(.horizontal)
         .padding(.top, 8)
         .background(Color.softSandSat.opacity(0.7))
     }
+
 
     @ViewBuilder
     var rewardOverlayLayer: some View {

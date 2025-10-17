@@ -1,5 +1,16 @@
 import SwiftUI
 
+// Cell size environment for board/bag responsiveness.
+// Put this at top-level in an existing file.
+struct CellSizeKey: EnvironmentKey { static let defaultValue: CGFloat = 64 }
+
+extension EnvironmentValues {
+    var cellSize: CGFloat {
+        get { self[CellSizeKey.self] }
+        set { self[CellSizeKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     
 #if DEBUG
@@ -40,6 +51,11 @@ struct ContentView: View {
     @State private var showWinPopup = false
     @State private var bagGridRect: CGRect = .zero   // precise hit area = LazyVGrid
     @State private var bagGridWidth: CGFloat = 0
+    
+    @State private var isDraggingGhost = false
+    @State private var ghostTile: LetterTile? = nil
+    @State private var ghostStagePoint: CGPoint = .zero   // in "stage" coords
+
 //    @State private var activeDragID: UUID? = nil   // backup for stage-level .onEnded
 
     
@@ -102,7 +118,15 @@ struct ContentView: View {
 //                .environmentObject(ToastCenter.shared)
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
-
+        .overlay(alignment: .topLeading) {
+            if isDraggingGhost, let t = ghostTile {
+                tileGhost(t, size: ghostSize)
+                    .position(x: ghostStagePoint.x, y: ghostStagePoint.y)
+                    .allowsHitTesting(false)
+                    .zIndex(1000)                    // make sure it’s above everything
+                    .clipped(antialiased: false)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
@@ -239,163 +263,6 @@ struct ContentView: View {
         }
     }
 
-//    // MARK: - Daily Wallet Panel (buy boosts + coins)
-//    private struct DailyWalletPanel: View {
-//        @EnvironmentObject var levels: LevelsService
-//        @EnvironmentObject var boosts: BoostsService
-//        @EnvironmentObject var game: GameState
-//
-//        let dismiss: () -> Void
-//
-//        @State private var showInsufficientCoins = false
-//        @State private var justCollected: Int = 0        // optional feedback
-//
-//        var body: some View {
-//            // Pending rewards
-//            let unclaimed = Achievement.unclaimed(using: game)
-//            let pendingTotal = unclaimed.reduce(0) { $0 + $1.rewardCoins }
-//
-//            return VStack(alignment: .leading, spacing: 16) {
-//                // Header
-//                HStack {
-//                    Label("Wallet", systemImage: "creditcard")
-//                        .font(.caption)
-//                        .foregroundStyle(.secondary)
-//                    Spacer()
-//                    HStack(spacing: 6) {
-//                        Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-//                        Text("\(levels.coins)").font(.headline).monospacedDigit()
-//                    }
-//                    .softRaisedCapsule()
-//                }
-//
-//                // ✅ Collect Rewards (only if pending)
-//                if pendingTotal > 0 {
-//                    VStack(alignment: .leading, spacing: 8) {
-//                        Text("Rewards Available")
-//                            .font(.subheadline)
-//                            .foregroundStyle(.secondary)
-//
-//                        Button {
-//                            let added = Achievement.claimAll(using: game, levels: levels)
-//                            #if os(iOS)
-//                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-//                            #endif
-//                            // Optionally you could flash a local “+added coins” UI here.
-//                            dismiss()
-//                        } label: {
-//                            HStack(spacing: 10) {
-//                                Image(systemName: "gift.fill").imageScale(.medium)
-//                                Text("Collect Rewards")
-//                                    .font(.headline)
-//                                Spacer()
-//                                HStack(spacing: 4) {
-//                                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-//                                    Text("+\(pendingTotal)").font(.subheadline).monospacedDigit()
-//                                }
-//                            }
-//                            .foregroundStyle(.primary)
-//                            .padding(.vertical, 12)
-//                            .padding(.horizontal, 14)
-//                            .background(
-//                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-//                                    .fill(Color.white.opacity(0.14))
-//                                    .overlay(
-//                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-//                                            .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-//                                    )
-//                            )
-//                        }
-//                        .buttonStyle(.plain)
-//                    }
-//                }
-//
-//                // Buy Boosts
-//                VStack(alignment: .leading, spacing: 8) {
-//                    Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
-//                    HStack(spacing: 10) {
-//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
-//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
-//                        walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
-//                    }
-//                }
-//
-//                // Get Coins (IAP stubs)
-//                VStack(alignment: .leading, spacing: 8) {
-//                    Text("Get Coins").font(.subheadline).foregroundStyle(.secondary)
-//                    HStack(spacing: 10) {
-//                        walletIAPPill(amount: 100,  price: "$0.99") { addCoins(100) }
-//                        walletIAPPill(amount: 300,  price: "$2.99") { addCoins(300) }
-//                        walletIAPPill(amount: 1200, price: "$7.99") { addCoins(1200) }
-//                    }
-//                }
-//            }
-//            .alert("Not enough coins", isPresented: $showInsufficientCoins) {
-//                Button("OK", role: .cancel) { }
-//            } message: { Text("You don't have enough coins for that purchase.") }
-//        }
-//
-//
-//        // Actions
-//        private func buyReveal(cost: Int, count: Int) {
-//            if levels.coins >= cost {
-//                levels.addCoins(-cost)
-//                boosts.grant(count: count)
-//                #if os(iOS)
-//                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-//                #endif
-//                dismiss()
-//            } else {
-//                showInsufficientCoins = true
-//            }
-//        }
-//        private func addCoins(_ n: Int) {
-//            levels.addCoins(n)
-//            #if os(iOS)
-//            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-//            #endif
-//            dismiss()
-//        }
-//
-//        // Tiny pills (local copies)
-//        @ViewBuilder
-//        private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
-//            Button(action: action) {
-//                VStack(spacing: 6) {
-//                    Image(systemName: icon).font(.headline)
-//                    Text(title).font(.caption).lineLimit(1)
-//                    HStack(spacing: 4) {
-//                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-//                        Text("\(cost)").font(.caption2).monospacedDigit()
-//                    }.opacity(0.9)
-//                }
-//                .foregroundStyle(.primary)
-//                .padding(.vertical, 10).padding(.horizontal, 12)
-//                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-//                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
-//            }
-//            .buttonStyle(.plain)
-//        }
-//
-//        @ViewBuilder
-//        private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
-//            Button(action: action) {
-//                VStack(spacing: 6) {
-//                    HStack(spacing: 6) {
-//                        Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-//                        Text("+\(amount)").font(.caption).monospacedDigit()
-//                    }
-//                    Text(price).font(.caption2).opacity(0.9)
-//                }
-//                .foregroundStyle(.primary)
-//                .padding(.vertical, 10).padding(.horizontal, 12)
-//                .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-//                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
-//            }
-//            .buttonStyle(.plain)
-//        }
-//    }
-
     // MARK: - Small tile used in Boosts panel
     private struct BoostTile: View {
         let icon: String
@@ -454,14 +321,6 @@ struct ContentView: View {
 
                 }
 
-                // Optional: share button floats inside the same region
-//                if game.solved {
-//                    Button("Copy Share Text") {
-//                        UIPasteboard.general.string = game.shareString()
-//                    }
-//                    .buttonStyle(.borderedProminent)
-//                    .padding(12)
-//                }
             }
         }
         // Keep a stable height so bag/panel occupy identical vertical space
@@ -487,53 +346,52 @@ struct ContentView: View {
     private var boardView: some View {
         GeometryReader { geo in
             let gap  = boardGap
-            let span = min(geo.size.width, geo.size.height)
-            let base = floor((span - 3 * gap) / 4)              // natural responsive cell
-            let cell = max(36, min(base * tileScale, 120))      // clamp to a sensible range
+            let span = min(geo.size.width, geo.size.height)        // max square that fits
+            // natural responsive cell (4 cells + 3 gaps)
+            let base = floor((span - 3 * gap) / 4)
+            // allow board to expand fully on large screens; keep a sane minimum
+            let cell = max(36, base * tileScale)
+            // recompute board size from the resolved cell size
             let boardSize = (4 * cell) + (3 * gap)
 
             ZStack(alignment: .topLeading) {
                 boardGrid(cell: cell, gap: gap, boardSize: boardSize)
             }
+            .environment(\.cellSize, cell)                         // ← make size available to cells/tiles
             .frame(width: boardSize, height: boardSize, alignment: .topLeading)
-            
+
             // publish live layout info for snapping & conversion
             .onAppear {
                 currentBoardCell     = cell
                 boardGap             = gap
                 boardOriginInStage   = geo.frame(in: .named("stage")).origin
-                boardRect            = geo.frame(in: .named("stage"))          // 👈 capture full rect
-                
+                boardRect            = geo.frame(in: .named("stage")) // full rect of this board container
+
                 // Re-show the win popup for today’s Daily if it’s already solved.
                 if !game.isLevelMode, game.solved {
-                    withAnimation(.spring()) {
-                        showWinPopup = true
-                    }
+                    withAnimation(.spring()) { showWinPopup = true }
                 }
             }
             .onChange(of: geo.size) {
                 currentBoardCell     = cell
                 boardGap             = gap
                 boardOriginInStage   = geo.frame(in: .named("stage")).origin
-                boardRect            = geo.frame(in: .named("stage"))          // 👈 keep updated
+                boardRect            = geo.frame(in: .named("stage"))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Tile bag
-
+    // MARK: - Tile bag (adaptive, responsive)
     private var tileBag: some View {
         let bagTiles = game.tiles.filter { $0.location == .bag }
-        let columns  = [GridItem(.adaptive(minimum: bagTileSize), spacing: bagGap)]
 
-        // Compute reserved height using the last measured width of the whole bag
-        let width = max(1, bagGridWidth)
-        let cols = max(1, Int(floor((width + bagGap) / (bagTileSize + bagGap))))
-        let totalTiles = game.tiles.count                 // full capacity (usually 16)
-        let fullRows = Int(ceil(Double(totalTiles) / Double(cols)))
-        let reservedHeight = (CGFloat(fullRows) * bagTileSize)
-                           + (CGFloat(max(0, fullRows - 1)) * bagGap)
+        // Make type explicit so the compiler doesn't struggle
+        let minEdge: CGFloat = bagTileSize
+        let maxEdge: CGFloat = max(bagTileSize, 160)
+        let columns: [GridItem] = [
+            GridItem(.adaptive(minimum: minEdge, maximum: maxEdge), spacing: bagGap, alignment: .center)
+        ]
 
         return VStack(alignment: .leading, spacing: 8) {
             Text("Letter Bag")
@@ -542,37 +400,10 @@ struct ContentView: View {
 
             LazyVGrid(columns: columns, spacing: bagGap) {
                 ForEach(bagTiles) { tile in
-                    GeometryReader { bagGeo in
-                        let origin = bagGeo.frame(in: .named("stage")).origin
-
-                        tileView(
-                            tile,
-                            cell: bagTileSize,
-                            gap: boardGap,
-                            toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
-                            onDragBegan: {
-                                ghostSize = .init(width: bagTileSize, height: bagTileSize)
-                            },
-                            onDragEnded: { stagePoint in
-                                handleDrop(of: tile, at: stagePoint)
-                            }
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(
-                                    selectedTileID == tile.id ? Color.accentColor : .clear,
-                                    lineWidth: 2
-                                )
-                        )
-                        .onTapGesture {
-                            selectedTileID = (selectedTileID == tile.id) ? nil : tile.id
-                        }
-                    }
-                    .frame(width: bagTileSize, height: bagTileSize)
+                    bagTileCell(tile) // ← extracted cell keeps body simple
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .frame(height: (bagGridWidth > 0) ? reservedHeight : nil, alignment: .top)
             .overlay(
                 Group {
                     if bagTiles.isEmpty {
@@ -588,26 +419,66 @@ struct ContentView: View {
                 alignment: .center
             )
         }
-        // Make the *whole* bag area a single, solid hit target (no holes)
         .contentShape(Rectangle())
-
-        // 🔴 Single source of truth for BOTH the bag rect and width
         .background(
             GeometryReader { bagGeo in
                 Color.clear
-                    .onAppear {
-                        bagGridWidth = bagGeo.size.width
-                        // DEBUG:
-                        // print("📐 bagRect appear:", bagRect)
-                    }
-                    .onChange(of: bagGeo.size) { _, _ in
-                        bagGridWidth = bagGeo.size.width
-                        // DEBUG:
-                        // print("📐 bagRect change:", bagRect)
-                    }
+                    .onAppear  { bagGridWidth = bagGeo.size.width }
+                    .onChange(of: bagGeo.size) { _, _ in bagGridWidth = bagGeo.size.width }
             }
         )
     }
+
+    // Single bag grid cell (square, responsive). Kept small so type-checking is fast.
+    @ViewBuilder
+    private func bagTileCell(_ tile: LetterTile) -> some View {
+        GeometryReader { bagGeo in
+            let edge   = min(bagGeo.size.width, bagGeo.size.height)
+            let origin = bagGeo.frame(in: .named("stage")).origin
+            let toStage: (CGPoint) -> CGPoint = { pt in
+                CGPoint(x: origin.x + pt.x, y: origin.y + pt.y)
+            }
+
+            tileView(
+                tile,
+                cell: edge,
+                gap: boardGap,
+                toStage: toStage,
+                onDragBegan: {
+                    // set up ghost once per drag
+                    if !isDraggingGhost {
+                        ghostTile = tile
+                        ghostSize = .init(width: edge, height: edge)
+                        isDraggingGhost = true
+                    }
+                },
+                onDragChanged: { stagePoint in
+                    // live position in "stage" space
+                    ghostStagePoint = stagePoint
+                },
+                onDragEnded: { stagePoint in
+                    // cleanup + drop handling
+                    isDraggingGhost = false
+                    handleDrop(of: tile, at: stagePoint)
+                    ghostTile = nil
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        selectedTileID == tile.id ? Color.accentColor : .clear,
+                        lineWidth: 2
+                    )
+            )
+            .onTapGesture {
+                selectedTileID = (selectedTileID == tile.id) ? nil : tile.id
+            }
+        }
+        .aspectRatio(1, contentMode: .fit) // keep the grid cell square
+    }
+
+
+
 
     
     @ViewBuilder
@@ -647,16 +518,29 @@ struct ContentView: View {
                     )
 
                 if let tile = game.tile(at: coord) {
+                    let toStage: (CGPoint) -> CGPoint = { pt in
+                        CGPoint(x: origin.x + pt.x, y: origin.y + pt.y)
+                    }
+
                     tileView(
                         tile,
                         cell: cell,
                         gap: gap,
-                        toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
+                        toStage: toStage,
                         onDragBegan: {
-                            ghostSize = .init(width: cell, height: cell)
+                            if !isDraggingGhost {
+                                ghostTile  = tile
+                                ghostSize  = .init(width: cell, height: cell)
+                                isDraggingGhost = true
+                            }
+                        },
+                        onDragChanged: { stagePoint in
+                            ghostStagePoint = stagePoint
                         },
                         onDragEnded: { stagePoint in
-                            handleDrop(of: tile, at: stagePoint)   // 👈 handle drop on board or bag
+                            isDraggingGhost = false
+                            handleDrop(of: tile, at: stagePoint)
+                            ghostTile = nil
                         }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill cell
@@ -686,100 +570,62 @@ struct ContentView: View {
         gap: CGFloat,
         toStage: @escaping (CGPoint) -> CGPoint,
         onDragBegan: @escaping () -> Void,
-        onDragEnded: ((CGPoint) -> Void)? = nil
+        onDragChanged: @escaping (CGPoint) -> Void,
+        onDragEnded: @escaping (CGPoint) -> Void
     ) -> some View {
-        // Status flags
-        let isOnBoard: Bool = {
-            if case .board = tile.location { return true } else { return false }
-        }()
-        let lockedByBoost = game.boostedLockedTileIDs.contains(tile.id)
-        let lockedByWorld = game.worldLockedTileIDs.contains(tile.id)
-        let solved        = game.solved
-        let solvedOnBoard = solved && isOnBoard
-        let lockedOnBoard = (lockedByBoost || lockedByWorld || solved) && isOnBoard
+        // Lock state
+        let isBoostLocked  = game.boostedLockedTileIDs.contains(tile.id)
+        let isWorldLocked  = game.worldLockedTileIDs.contains(tile.id)
+        let isLocked       = isBoostLocked || isWorldLocked
+        let draggable      = !isLocked
 
-        // Fill (solved has highest precedence)
-        let tileFillStyle: AnyShapeStyle = {
-            if solvedOnBoard {                         // ✅ board solved → green
-                return AnyShapeStyle(Color.green)
-            }
-            if lockedByBoost && isOnBoard {            // boost-locked also green
-                return AnyShapeStyle(Color.green)
-            }
-            if lockedByWorld && isOnBoard {            // world-locked (unsolved) → purple
-                return AnyShapeStyle(
-                    LinearGradient(
-                        colors: [Color.purple.opacity(0.20), Color.purple.opacity(0.20)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
+        // Scaled visuals
+        let radius = max(10, cell * 0.12)
+        let strokeW = max(1, cell * 0.03)
+
+        // Colors
+        let fill: Color = {
+            if isBoostLocked { return Color.green.opacity(0.95) }      // boost reveal
+            if isWorldLocked { return Color.purple.opacity(0.95) }     // world word
+            return Color.white
+        }()
+        let border: Color = isLocked ? Color.white.opacity(0.25)
+                                     : Color.black.opacity(0.08)
+        let textColor: Color = isLocked ? .white : .primary
+        let fontSz = max(22, cell * 0.50)
+
+        // Base tile face (no gesture yet)
+        let face = ZStack {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(fill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius)
+                        .stroke(border, lineWidth: strokeW)
                 )
-            }
-            return AnyShapeStyle(Color(.systemBackground))
-        }()
 
-        // Stroke
-        let strokeColor: Color = {
-            if solvedOnBoard || (lockedByBoost && isOnBoard) { return .green.opacity(0.85) }
-            if lockedByWorld && isOnBoard { return .white.opacity(0.85) }
-            return .secondary
-        }()
-
-        // Letter
-        let textColor: Color = {
-            if solvedOnBoard || ((lockedByBoost || lockedByWorld) && isOnBoard) { return .black }
-            return .primary
-        }()
-
-        let side = max(1, cell - 4)
-        let corner: CGFloat = 8
-
-        ZStack {
-            // Base tile
-            RoundedRectangle(cornerRadius: corner).fill(tileFillStyle)
-            RoundedRectangle(cornerRadius: corner).stroke(strokeColor, lineWidth: 1)
-
-            // Letter
             Text(String(tile.letter).uppercased())
-                .font(.title3).bold()
+                .font(.system(size: fontSz, weight: .heavy, design: .rounded))
                 .foregroundStyle(textColor)
-
-            // 2s SHIMMER ON PURPLE-LOCKED TILES (suppress after solved)
-            if game.worldShimmerIDs.contains(tile.id) && !solvedOnBoard {
-                ShimmerOverlay(
-                    duration: 1.5,
-                    bandScale: 1.4,
-                    minBand: 10,
-                    thickness: 24,
-                    angleDeg: 0,
-                    peakOpacity: 0.45,
-                    overscan: 60
-                )
-                .clipShape(RoundedRectangle(cornerRadius: corner))
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
         }
-        .frame(width: side, height: side)
-        .shadow(radius: 1, x: 0, y: 1)
 
-        // Block dragging for any locked-on-board tile
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    guard !lockedOnBoard else { return }
-                    draggingTileID = tile.id
-                    dragPoint = toStage(value.location)
-                    onDragBegan()
-                    // activeDragID = tile.id
-                }
-                .onEnded { value in
-                    guard !lockedOnBoard else { return }
-                    draggingTileID = nil
-                    onDragEnded?(toStage(value.location))
-                }
-        )
+        // Attach drag only if not locked
+        if draggable {
+            face.gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        onDragBegan()
+                        onDragChanged(toStage(value.location))
+                    }
+                    .onEnded { value in
+                        onDragEnded(toStage(value.location))
+                    }
+            )
+        } else {
+            face // locked tiles are not draggable
+        }
     }
-
 
 
 
@@ -1001,26 +847,30 @@ struct ContentView: View {
     }
 
 
-
     @ViewBuilder
     private func tileGhost(_ tile: LetterTile, size: CGSize) -> some View {
         let side = min(size.width, size.height)
-        let corner: CGFloat = 8
-        let fontSize = side * 0.55   // scale letter with tile size
+        let corner = max(8, side * 0.12)     // scale corners with size
+        let fontSize = max(22, side * 0.55)  // readable floor + scale
 
         ZStack {
-            RoundedRectangle(cornerRadius: corner)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .fill(Color(.systemBackground).opacity(0.98))
                 .overlay(
                     RoundedRectangle(cornerRadius: corner)
                         .stroke(Color.accentColor, lineWidth: 2)
                 )
+                .shadow(radius: 6, y: 3)
+
             Text(String(tile.letter).uppercased())
-                .font(.system(size: fontSize, weight: .bold))
+                .font(.system(size: fontSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(.primary)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
         }
-        .frame(width: size.width, height: size.height, alignment: .center)
-        .shadow(radius: 4)
+        .frame(width: side, height: side)
     }
+
 
     // MARK: - Drag/drop helpers
 
@@ -1049,9 +899,6 @@ struct ContentView: View {
         // 3) If the tile originated in the bag and we didn't hit the board,
         //    do nothing (it stays in the bag).
     }
-
-
-
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
         // Convert from the shared "stage" space to the board’s local space
@@ -1084,4 +931,6 @@ struct ContentView: View {
         guard let col = index(for: p.x), let row = index(for: p.y) else { return nil }
         return BoardCoord(row: row, col: col)
     }
+
 }
+
