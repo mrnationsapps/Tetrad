@@ -116,68 +116,85 @@ struct LevelsView: View {
     // MARK: Header spacer (toolbar holds the actual header UI)
     private var header: some View { Color.clear.frame(height: 1) }
 
-    // MARK: World list (3 rows, horizontal scroll)
+    // MARK: World list (responsive 2×2 on iPhone, 3×2 on iPad; vertical scroll)
     private var worldList: some View {
-        let cardSize = CGSize(width: 175, height: 262)
-        let rowSpacing: CGFloat = 8
-        let rows: [GridItem] = [
-            GridItem(.fixed(cardSize.height), spacing: rowSpacing, alignment: .top),
-            GridItem(.fixed(cardSize.height), spacing: rowSpacing, alignment: .top),
-        ]
+        let cardAspect: CGFloat = 262.0 / 175.0
+        let spacing: CGFloat = 12
+        let horizPad: CGFloat = 16
+        let innerVPad: CGFloat = 8   // the same value used in .padding(.vertical, 8)
 
         return VStack(alignment: .leading, spacing: 8) {
             Text("Worlds")
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: rows, alignment: .top, spacing: 8) {
-                    ForEach(levels.worlds) { world in
-                        if levels.isUnlocked(world) {
-                            NavigationLink {
-                                destinationView(for: world)      // Tutorial vs normal
-                                    .onAppear { levels.select(world) } // keep selection highlight
-                            } label: {
-                                WorldCard(
-                                    world: world,
-                                    selected: world.id == levels.selectedWorldID,
-                                    unlocked: true,
-                                    coins: levels.coins
-                                    // onTap omitted → nil → no internal gesture
-                                )
-                                .frame(width: cardSize.width, height: cardSize.height)
-                            }
-                            .buttonStyle(.plain) // keep label look
+            GeometryReader { geo in
+                let isPad = UIDevice.current.userInterfaceIdiom == .pad
+                let cols  = isPad ? 3 : 2
+                let rowsVisible = 2        // 2×2 on iPhone, 3×2 on iPad
 
-                        } else {
-                            Button {
-                                levels.select(world)
-                                if levels.coins >= world.unlockCost {
-                                    pendingUnlockWorld = world
-                                    showConfirmUnlock = true
-                                } else {
-                                    showInsufficientCoins = true
+                let totalGaps = CGFloat(cols - 1) * spacing
+                let usableW   = geo.size.width - (horizPad * 2) - totalGaps
+                let cardW     = floor(usableW / CGFloat(cols))
+                let cardH     = floor(cardW * cardAspect)
+
+                // height for exactly N visible rows (content only)
+                let contentHeight = (CGFloat(rowsVisible) * cardH) + (CGFloat(rowsVisible - 1) * spacing)
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.fixed(cardW), spacing: spacing, alignment: .top), count: cols),
+                        spacing: spacing
+                    ) {
+                        ForEach(levels.worlds) { world in
+                            if levels.isUnlocked(world) {
+                                NavigationLink {
+                                    destinationView(for: world)
+                                        .onAppear { levels.select(world) }
+                                } label: {
+                                    WorldCard(
+                                        world: world,
+                                        selected: world.id == levels.selectedWorldID,
+                                        unlocked: true,
+                                        coins: levels.coins
+                                    )
+                                    .frame(width: cardW, height: cardH)
                                 }
-                            } label: {
-                                WorldCard(
-                                    world: world,
-                                    selected: world.id == levels.selectedWorldID,
-                                    unlocked: false,
-                                    coins: levels.coins
-                                    // outer Button handles the tap
-                                )
-                                .frame(width: cardSize.width, height: cardSize.height)
+                                .buttonStyle(.plain)
+                            } else {
+                                Button {
+                                    levels.select(world)
+                                    if levels.coins >= world.unlockCost {
+                                        pendingUnlockWorld = world
+                                        showConfirmUnlock = true
+                                    } else {
+                                        showInsufficientCoins = true
+                                    }
+                                } label: {
+                                    WorldCard(
+                                        world: world,
+                                        selected: world.id == levels.selectedWorldID,
+                                        unlocked: false,
+                                        coins: levels.coins
+                                    )
+                                    .frame(width: cardW, height: cardH)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, horizPad)
+                    .padding(.vertical, innerVPad) // ← this is now accounted for
                 }
-                .frame(height: (cardSize.height * 2) + (rowSpacing * 2))
-                .padding(.vertical, 8)
-                .zIndex(1) // keep the grid above any decorative overlays
+                // include vertical padding (top+bottom) and a tiny fudge for rounding
+                .frame(height: contentHeight + (innerVPad * 2) + 1)
             }
+            .frame(maxWidth: .infinity, minHeight: 200)
         }
     }
+
+
+
 
 
     @ViewBuilder
