@@ -34,6 +34,7 @@ struct IntroView: View {
                 // Lottie coin overlay
                 rewardOverlayLayer
             }
+            .padding(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
             .safeAreaInset(edge: .bottom) { bottomCTA }
             .navigationDestination(isPresented: $navigateToGame) {
                 ContentView()

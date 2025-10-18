@@ -68,14 +68,14 @@ struct ContentView: View {
     }
     
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .top) {
             Color.softSandSat.ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 header
                 boardView
                 underBoardRegion
             }
-            .padding()
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
             // Ghost Tile
             if let id = draggingTileID,
@@ -341,46 +341,53 @@ struct ContentView: View {
         .alignmentGuide(.top) { d in d[.top] }           // 👈 report our own top
     }
 
-    // MARK: - Board (responsive, instant drag)
+    // MARK: - Board (responsive, centered)
 
     private var boardView: some View {
         GeometryReader { geo in
             let gap  = boardGap
-            let span = min(geo.size.width, geo.size.height)        // max square that fits
-            // natural responsive cell (4 cells + 3 gaps)
+            let span = min(geo.size.width, geo.size.height)
             let base = floor((span - 3 * gap) / 4)
-            // allow board to expand fully on large screens; keep a sane minimum
             let cell = max(36, base * tileScale)
-            // recompute board size from the resolved cell size
             let boardSize = (4 * cell) + (3 * gap)
 
-            ZStack(alignment: .topLeading) {
+            // The *board container* – sized to the exact square we need
+            let board = ZStack(alignment: .topLeading) {
                 boardGrid(cell: cell, gap: gap, boardSize: boardSize)
             }
-            .environment(\.cellSize, cell)                         // ← make size available to cells/tiles
-            .frame(width: boardSize, height: boardSize, alignment: .topLeading)
-
-            // publish live layout info for snapping & conversion
-            .onAppear {
-                currentBoardCell     = cell
-                boardGap             = gap
-                boardOriginInStage   = geo.frame(in: .named("stage")).origin
-                boardRect            = geo.frame(in: .named("stage")) // full rect of this board container
-
-                // Re-show the win popup for today’s Daily if it’s already solved.
-                if !game.isLevelMode, game.solved {
-                    withAnimation(.spring()) { showWinPopup = true }
+            .frame(width: boardSize, height: boardSize)
+            // measure the board container itself (not the outer geo)
+            .background(
+                GeometryReader { inner in
+                    Color.clear
+                        .onAppear {
+                            currentBoardCell   = cell
+                            boardGap           = gap
+                            boardOriginInStage = inner.frame(in: .named("stage")).origin
+                            boardRect          = inner.frame(in: .named("stage"))
+                        }
+                        .onChange(of: inner.size) { _, _ in
+                            currentBoardCell   = cell
+                            boardGap           = gap
+                            boardOriginInStage = inner.frame(in: .named("stage")).origin
+                            boardRect          = inner.frame(in: .named("stage"))
+                        }
                 }
-            }
-            .onChange(of: geo.size) {
-                currentBoardCell     = cell
-                boardGap             = gap
-                boardOriginInStage   = geo.frame(in: .named("stage")).origin
-                boardRect            = geo.frame(in: .named("stage"))
-            }
+            )
+
+            // Center the board container within all available space
+            ZStack { board }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .onAppear {
+                    // If you want to re-show Daily win popup when returning
+                    if !game.isLevelMode, game.solved {
+                        withAnimation(.spring()) { showWinPopup = true }
+                    }
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
 
     // MARK: - Tile bag (adaptive, responsive)
     private var tileBag: some View {
