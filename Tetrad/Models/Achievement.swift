@@ -58,7 +58,7 @@ extension Achievement {
             key: "unlock_world",
             title: "First World",
             subtitle: "Unlock your first World.",
-            rewardCoins: 5,
+            rewardCoins: 15,
             condition: { $0.worldsUnlockedCount >= 1 }
         ),
 
@@ -66,7 +66,7 @@ extension Achievement {
             key: "five_levels",
             title: "Just Getting Started",
             subtitle: "Solve 5 Levels.",
-            rewardCoins: 5,
+            rewardCoins: 15,
             condition: { $0.totalLevelsSolved >= 5 }
         ),
 
@@ -74,7 +74,7 @@ extension Achievement {
             key: "five_boosts",
             title: "A Little Help",
             subtitle: "Buy 5 Boosts.",
-            rewardCoins: 5,
+            rewardCoins: 15,
             condition: { $0.boostsPurchasedTotal >= 5 }
         ),
 
@@ -82,7 +82,7 @@ extension Achievement {
             key: "first_daily",
             title: "First Daily Solve",
             subtitle: "Complete your first daily puzzle.",
-            rewardCoins: 5,
+            rewardCoins: 10,
             condition: { $0.totalDailiesSolved >= 1 }
         ),
 
@@ -90,7 +90,7 @@ extension Achievement {
             key: "streak_3_daily",
             title: "On a Roll",
             subtitle: "3-day Daily streak.",
-            rewardCoins: 5,
+            rewardCoins: 15,
             condition: { $0.streak >= 3 }
         ),
 
@@ -98,7 +98,7 @@ extension Achievement {
             key: "streak_7_daily",
             title: "Hot Streak",
             subtitle: "7-day Daily streak.",
-            rewardCoins: 5,
+            rewardCoins: 15,
             condition: { $0.streak >= 7 }
         ),
 
@@ -106,23 +106,29 @@ extension Achievement {
             key: "efficient_10",
             title: "Efficient Thinker",
             subtitle: "Solve in 10 moves or fewer.",
-            rewardCoins: 5,
-            condition: { $0.solved && $0.moveCount <= 10 }
+            rewardCoins: 25,
+            // Mode-agnostic, persists once earned
+            condition: { _ in
+                UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_10")
+            }
         ),
 
         .init(
             key: "perfect_fill",
             title: "Perfect Fill",
             subtitle: "Finish with no boosts.",
-            rewardCoins: 5,
-            condition: { $0.solved && $0.boostsUsedThisRun == 0 }
+            rewardCoins: 15,
+            // Mode-agnostic, persists once earned
+            condition: { _ in
+                UserDefaults.standard.bool(forKey: "ach.unlocked.perfect_fill")
+            }
         ),
 
         .init(
             key: "daily_return",
             title: "Come Back Tomorrow",
             subtitle: "Solve two dailies in a row.",
-            rewardCoins: 5,
+            rewardCoins: 10,
             condition: { $0.streak >= 2 }
         )
     ]

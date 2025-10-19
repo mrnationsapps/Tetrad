@@ -301,8 +301,8 @@ extension LevelsService {
 
     @MainActor
     func rewardCoins(for moves: Int, par: Int) -> (total: Int, base: Int, bonus: Int) {
-        let base = 3
-        let bonus = max(0, (par - moves) / 5)
+        let base = 5
+        let bonus = max(0, (par - moves) / 10)
         return (base + bonus, base, bonus)
     }
 }

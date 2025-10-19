@@ -381,6 +381,29 @@ final class GameState: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: - Daily solve de-dupe (once per UTC day)
+    private let countedDailyKeysUD = "stats.countedDailyKeys"
+
+    private func loadStringSet(for key: String) -> Set<String> {
+        (UserDefaults.standard.array(forKey: key) as? [String]).map(Set.init) ?? []
+    }
+    private func saveStringSet(_ set: Set<String>, for key: String) {
+        UserDefaults.standard.set(Array(set), forKey: key)
+    }
+
+    /// Count a daily solve exactly once per day key (UTC)
+    @MainActor
+    private func recordFirstTimeDailySolveIfNeeded(todayKey: String) {
+        var set = loadStringSet(for: countedDailyKeysUD)
+        if !set.contains(todayKey) {
+            set.insert(todayKey)
+            saveStringSet(set, for: countedDailyKeysUD)
+            totalDailiesSolved += 1
+            saveAchievementTotals()
+        }
+    }
+
+    
     private func checkIfSolved() {
         guard let solution = self.solution, solution.count == 4 else { return }
 
@@ -396,13 +419,33 @@ final class GameState: ObservableObject {
         }
 
         solved = true
+        
+        // Persist one-time “skill” achievements (mode-agnostic)
+        let d = UserDefaults.standard
+        if moveCount <= 10 {
+            d.set(true, forKey: "ach.unlocked.efficient_10")
+        }
+        if boostsUsedThisRun == 0 {
+            d.set(true, forKey: "ach.unlocked.perfect_fill")
+        }
 
-        // Only Daily mode updates streak & daily persistence
+        // Daily-only: bump the daily counter immediately (idempotent), then streak + persist
         if !isLevelMode {
+            // Prefer the puzzle identity’s day key; fallback to today UTC if needed
+            let todayKey: String = (identity?.dayUTC) ?? {
+                let fmt = ISO8601DateFormatter()
+                fmt.timeZone = .init(secondsFromGMT: 0)
+                fmt.formatOptions = [.withFullDate]
+                return fmt.string(from: Date())
+            }()
+
+            recordFirstTimeDailySolveIfNeeded(todayKey: todayKey)  // ← unlocks `first_daily`
             advanceStreakIfNeeded()
             registerSolvedAndPersist()
         }
     }
+
+
     
     private func advanceStreakIfNeeded() {
         let fmt = ISO8601DateFormatter()
