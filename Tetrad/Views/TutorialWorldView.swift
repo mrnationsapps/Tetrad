@@ -1,30 +1,61 @@
-//
-//  TutorialWorldView.swift
-//  Tetrad
-//
-//  Created by kevin nations on 10/3/25.
-//
-// TutorialWorldView.swift
-
 import SwiftUI
 import UniformTypeIdentifiers
+
+// Simple bouncy down arrow used as the coachmark.
+private struct BouncyArrowDownSimple: View {
+    // Knobs
+    var xOffset: CGFloat = 84        // + moves right from horizontal center, – moves left
+    var yOffset: CGFloat = 0        // baseline vertical offset (negative lifts it up)
+    var bounce: CGFloat = 10        // bounce distance
+    var color: Color = .blue       // arrow color
+
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        // This view expands to the container's width, so the arrow starts centered.
+        ZStack {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(color)
+                .shadow(radius: 4, y: 2)
+                // centered horizontally, then nudged by xOffset; vertical = yOffset + bounce phase
+                .offset(x: xOffset, y: yOffset + phase)
+        }
+        .frame(maxWidth: .infinity) // ensures horizontal centering baseline
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                phase = bounce
+            }
+        }
+    }
+}
+
 
 // MARK: - Tutorial World (scripted, two steps)
 struct TutorialWorldView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
-    // If you want Wallet to function here later (coins purchases), you can also:
-    // @EnvironmentObject private var boosts: BoostsService
-    // @EnvironmentObject private var game: GameState
 
     let world: World   // pass the Tutorial world
 
     enum Step { case intro, level1, level1Win, level2, level2Win }
     @State private var step: Step = .intro
 
-    // inside struct TutorialWorldView
+    // Ensure L1Step is declared somewhere accessible:
+    // enum L1Step: Equatable { case placeFirst, explainCost, promptBoost, done }
     @State private var l1Step: L1Step = .placeFirst
-    @State private var lastAwardedCoins: Int = 0   // ← NEW: tracks what we actually granted
+
+    @State private var lastAwardedCoins: Int = 0
+    @State private var l1PlacedOne = false
+    @State private var showRevealTip = false
+    @State private var tutorialAllowsBoosts = false
+    @State private var showInsufficientCoins = false
+    @State private var showCoins = false
+
+    @State private var showCoinOverlay = false
+    @State private var isContinueDisabled = false
+
+    private let kTutorialCompleted = "ach.tutorial.completed"
 
     private var l1StepContent: (index: Int, text: String)? {
         guard step == .level1 else { return nil }
@@ -36,51 +67,32 @@ struct TutorialWorldView: View {
         }
     }
 
-    @State private var l1PlacedOne = false
-    // Old sheet path removed in favor of footer panels:
-    // @State private var showBoostSheet = false
-    @State private var showRevealTip = false
-    @State private var tutorialAllowsBoosts = false   // flips true when we reach Step 3 (“Tap Boosts…”)
-    @State private var showInsufficientCoins = false  // if you later enable wallet purchases here
-    @State private var showCoins = false
-
-    private let kTutorialCompleted = "ach.tutorial.completed"
     private func markTutorialCompleted() {
         UserDefaults.standard.set(true, forKey: kTutorialCompleted)
         NotificationCenter.default.post(name: .achievementsChanged, object: nil)
     }
-    
-    @State private var showCoinOverlay = false
-    @State private var isContinueDisabled = false
 
     private func handleTutorialContinue() {
         guard !isContinueDisabled else { return }
         isContinueDisabled = true
-
         if lastAwardedCoins > 0 {
-            // 1) show the animation first
             showCoinOverlay = true
         } else {
-            // no coins → go straight to next level
             goToNextTutorialLevel()
         }
     }
 
-    // Called after the animation completes
-    private func goToNextTutorialLevel() {
-        // whatever you currently do in `dismiss()` to progress
-        // e.g., advance tutorial index, start next level session, close sheet, etc.
-        dismiss()
-    }
-
+    // Called after the coin animation completes
+    private func goToNextTutorialLevel() { dismiss() }
 
     var body: some View {
         ZStack {
-            Color.softSandSat.ignoresSafeArea()   // ← back layer
+            Color.softSandSat.ignoresSafeArea()
+
             switch step {
             case .intro:
                 IntroLesson(onContinue: { step = .level1 })
-                
+
             case .level1:
                 TutorialLevelScreen(
                     title: "\(world.name) – Level 1",
@@ -89,36 +101,29 @@ struct TutorialWorldView: View {
                     dictionaryName: "Tutorial_Order2Dictionary",
                     showHelpers: true,
                     l1Step: $l1Step,
-                    // 1st tile placed → advance to step 2
                     onFirstPlacement: { l1Step = .explainCost },
-                    // (Old) onRequestBoosts used to show a sheet; keep as a no-op now.
-                    onRequestBoosts: { /* handled via footer Boosts panel */ },
+                    onRequestBoosts: { /* no-op; handled via footer */ },
                     onWin: {
-                        // FIRST tutorial level: award coins only if allowed (first-ever run)
                         let awarded = levels.awardCoinsIfAllowedInTutorial(3)
                         lastAwardedCoins = awarded
                         step = .level1Win
                     },
-                    // 2nd tile placed → advance to step 3
                     onSecondPlacement: { l1Step = .promptBoost }
                 )
-                
+
             case .level1Win:
                 WinSheet(
                     message: lastAwardedCoins > 0 ? "" : "",
                     primary: ("Continue", {
                         if lastAwardedCoins > 0 {
-                            showCoinOverlay = true      // ← show animation
-                            // do NOT change `step` here
+                            showCoinOverlay = true
                         } else {
-                            step = .level2              // no coins → go straight
+                            step = .level2
                         }
                     }),
                     secondary: nil
                 )
-                
-                
-                
+
             case .level2:
                 TutorialLevelScreen(
                     title: "\(world.name) – Level 2",
@@ -130,69 +135,60 @@ struct TutorialWorldView: View {
                     onFirstPlacement: {},
                     onRequestBoosts: {},
                     onWin: {
-                        // FINAL tutorial level: award if allowed, and mark tutorial completed
                         let awarded = levels.awardCoinsIfAllowedInTutorial(3, markCompletedIfFinal: true)
                         lastAwardedCoins = awarded
                         markTutorialCompleted()
-                        //print("tutorial won triggered")
                         step = .level2Win
                         UserDefaults.standard.set(true, forKey: "tutorial.finished.once")
-                        
                     }
                 )
-                
+
             case .level2Win:
                 WinSheet(
                     message: lastAwardedCoins > 0 ? "" : "",
                     primary: ("Continue", {
                         if lastAwardedCoins > 0 {
-                            showCoinOverlay = true    // overlay will dismiss to Worlds
+                            showCoinOverlay = true
                         } else {
-                            dismiss()                 // no reward → go straight back
+                            dismiss()
                         }
                     }),
                     secondary: nil
                 )
             }
         }
-        .navigationBarBackButtonHidden(true) //hides the system back button
-        
-        // coin lottie animation overlay
+        .navigationBarBackButtonHidden(true)
+
+        // Coin overlay
         .overlay {
             if showCoinOverlay {
                 CoinRewardOverlay(
                     isPresented: $showCoinOverlay,
                     amount: lastAwardedCoins
                 ) {
-                    // After the coin animation finishes…
-                    if step == .level1Win {
-                        step = .level2            // go to Tutorial Level 2
-                    } else if step == .level2Win {
-                        dismiss()                 // pop back to Worlds
-                    }
+                    if step == .level1Win { step = .level2 }
+                    else if step == .level2Win { dismiss() }
                 }
             }
         }
 
-
-        // ⬇️ Instruction Callout Text (L1) + L2 hint
+        // Instruction callout (bottom)
         .overlay(alignment: .bottomTrailing) {
             Group {
                 if let stepLine = l1StepContent {
                     CalloutCard {
-                        numberedStep(stepLine.index, stepLine.text)   // L1
+                        numberedStep(stepLine.index, stepLine.text)
                     }
                     .frame(maxWidth: 420)
                     .padding(.trailing, 0)
-                    .padding(.bottom, 120)   // sits above footer pills
+                    .padding(.bottom, 120)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if step == .level2 {
                     CalloutCard {
                         Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.92)) // was .secondary
-
+                            .foregroundStyle(.white.opacity(0.92))
                     }
                     .frame(maxWidth: 420)
                     .padding(.trailing, 0)
@@ -204,18 +200,17 @@ struct TutorialWorldView: View {
             }
         }
 
-        // 🔔 Flip the Boosts gate ON when Level 1 reaches the “Tap Boosts…” step
+        // Gate Boosts when Level 1 reaches “Tap Boosts…”
         .onChange(of: l1Step) { _, newStep in
             if step == .level1 {
                 tutorialAllowsBoosts = (newStep == .promptBoost)
             }
         }
 
-        // 🧭 Top toolbar (unchanged)
+        // Top toolbar
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
-                    //handleBack()
                     dismiss()
                 } label: {
                     HStack(spacing: 6) {
@@ -230,28 +225,18 @@ struct TutorialWorldView: View {
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .tracking(1.5)
             }
-//            ToolbarItem(placement: .navigationBarTrailing) {
-//                HStack(spacing: 6) {
-//                    Image(systemName: "dollarsign.circle.fill").imageScale(.large)
-//                    Text("\(levels.coins)").font(.headline).monospacedDigit()
-//                }
-//                .softRaisedCapsule()
-//            }
         }
 
-        // 👇 Footer + Panels for Tutorial (Boosts gated to Step 3; Wallet read-only)
+        // Footer panels
         .withFooterPanels(
             coins: nil,
             boostsAvailable: nil,
-            // ✅ Footer is interactable if: L2 OR (L1 and we’ve reached the Boost step)
             isInteractable: (step == .level2) || (step == .level1 && tutorialAllowsBoosts),
             disabledStyle: .ghosted,
             boostsPanel: { dismiss in
-                // Gate button enablement the same way
                 let boostsEnabled = (step == .level2) || (step == .level1 && tutorialAllowsBoosts)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    // Header
                     HStack(alignment: .top) {
                         Label("Boosts", systemImage: "bolt.fill")
                             .font(.caption)
@@ -262,7 +247,6 @@ struct TutorialWorldView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    // Tiles row
                     HStack(alignment: .top, spacing: 12) {
                         Button {
                             NotificationCenter.default.post(name: .tutorialRevealRequested, object: nil)
@@ -278,7 +262,6 @@ struct TutorialWorldView: View {
                         .opacity(boostsEnabled ? 1.0 : 0.4)
                         .alignmentGuide(.top) { d in d[.top] }
 
-                        // placeholders
                         boostTile(icon: "arrow.left.arrow.right", title: "Swap", material: .thinMaterial)
                             .opacity(0.35)
                             .alignmentGuide(.top) { d in d[.top] }
@@ -290,7 +273,7 @@ struct TutorialWorldView: View {
                     }
                 }
             },
-            walletPanel: { dismiss in
+            walletPanel: { _ in
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Wallet", systemImage: "creditcard")
@@ -309,22 +292,30 @@ struct TutorialWorldView: View {
             }
         )
 
-        // If you add purchases in tutorial later:
-        .alert("Not enough coins", isPresented: $showInsufficientCoins) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("You don't have enough coins for that purchase.")
+        // Arrow coachmark: draw it near the bottom-right, offset to hover above the Boosts pill.
+        // No anchors or preference keys required.
+        .overlay(alignment: .bottomTrailing) {
+            let showArrow = (step == .level1 && l1Step == .promptBoost)
+            if showArrow {
+                // ⬇️ Tweak these to align with your footer pill position
+                let rightPadding: CGFloat = 24   // match your screen horizontal padding
+                let aboveFooter: CGFloat  = 76   // ~ pillHeight(44) + footer vertical padding
+                BouncyArrowDownSimple()
+                    .padding(.trailing, rightPadding)
+                    .padding(.bottom, aboveFooter)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
         }
     }
 }
 
 // MARK: - Small helpers
-
 @ViewBuilder
 private func numberedStep(_ n: Int, _ text: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(text)
-            .foregroundStyle(.white.opacity(0.92)) // was .secondary
+            .foregroundStyle(.white.opacity(0.92))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
             .padding(10)
@@ -343,13 +334,12 @@ private struct CalloutCard<Content: View>: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(.white, lineWidth: 1)   // ← white stroke
+                    .stroke(.white, lineWidth: 1)
             )
             .shadow(radius: 6, x: 0, y: 2)
             .padding(.horizontal, 20)
             .offset(y: 20)
     }
-
 }
 
 private struct IntroLesson: View {
@@ -359,7 +349,6 @@ private struct IntroLesson: View {
             VStack(spacing: 18) {
                 (Text("TETRAD is based on the age-old \n")
                  + Text("word square puzzle.").italic())
-                //.font(.system(size: 18))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
@@ -389,7 +378,7 @@ private struct IntroLesson: View {
 }
 
 private struct StaticSquare3x3: View {
-    let rows: [String]  // 3 strings of length 3
+    let rows: [String]
     var body: some View {
         let letters = rows.map(Array.init)
         let corner: CGFloat = 10
@@ -421,9 +410,7 @@ private struct StaticSquare3x3: View {
     }
 }
 
-
-// MARK: - Overlays
-
+// MARK: - Win Sheet
 private struct WinSheet: View {
     let message: String
     let primary: (String, () -> Void)
@@ -452,7 +439,6 @@ private struct WinSheet: View {
 }
 
 // MARK: - Shared tiny tile used in the panels
-
 @ViewBuilder
 private func boostTile(icon: String, title: String, material: Material) -> some View {
     VStack(spacing: 8) {

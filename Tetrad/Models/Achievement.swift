@@ -73,8 +73,8 @@ extension Achievement {
         .init(
             key: "five_boosts",
             title: "A Little Help",
-            subtitle: "Buy 5 Boosts.",
-            rewardCoins: 15,
+            subtitle: "Buy 3 Boosts.",
+            rewardCoins: 10,
             condition: { $0.boostsPurchasedTotal >= 5 }
         ),
 

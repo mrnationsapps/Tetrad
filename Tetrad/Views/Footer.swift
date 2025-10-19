@@ -38,6 +38,9 @@ public struct Footer: View {
     public var verticalPadding: CGFloat = 10
     public var walletPulse: Bool = false
 
+    public var showBoostsArrow: Bool = false
+    public var boostsArrowLift: CGFloat = 20
+    
     // NEW: local animation driver so we can *stop* repeatForever cleanly
     @State private var pulsePhase: CGFloat = 0   // 0 → 1
     private let pulseAmplitude: CGFloat = 0.20   // bump size (8%)
@@ -56,7 +59,10 @@ public struct Footer: View {
         pillHeight: CGFloat = 44,
         horizontalPadding: CGFloat = 16,
         verticalPadding: CGFloat = 10,
-        walletPulse: Bool = false
+        walletPulse: Bool = false,
+        showBoostsArrow: Bool = false,
+        boostsArrowLift: CGFloat = 20
+
     ) {
         self.coins = coins
         self.boostsAvailable = boostsAvailable
@@ -72,6 +78,8 @@ public struct Footer: View {
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
         self.walletPulse = walletPulse
+        self.showBoostsArrow = showBoostsArrow
+        self.boostsArrowLift = boostsArrowLift
     }
 
     public var body: some View {
@@ -152,11 +160,22 @@ public struct Footer: View {
             }
             .buttonStyle(FooterPillButtonStyle(height: pillHeight))
             .background(
-                Capsule().fill(
-                    isBoostsActive
-                    ? Color.accentColor.opacity(0.18)
-                    : Color(.secondarySystemBackground)
-                )
+                ZStack {
+                    // keep your capsule background
+                    Capsule().fill(
+                        isBoostsActive
+                        ? Color.accentColor.opacity(0.18)
+                        : Color(.secondarySystemBackground)
+                    )
+
+//                    // emit the button's frame for the tutorial arrow to anchor to
+//                    GeometryReader { geo in
+//                        Color.clear.preference(
+//                            key: BoostsButtonFrameKey.self,
+//                            value: geo.frame(in: .named("stage"))   // use the same space when reading
+//                        )
+//                    }
+                }
             )
             .overlay(
                 Capsule().stroke(
@@ -164,6 +183,14 @@ public struct Footer: View {
                     lineWidth: isBoostsActive ? 1.25 : 1
                 )
             )
+            
+//            .overlay(alignment: .top) {
+//                if showBoostsArrow {
+//                    BouncyArrowDownSimple()
+//                        .offset(y: -boostsArrowLift)   // how far above the pill
+//                        .allowsHitTesting(false)
+//                }
+//            }
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
@@ -174,10 +201,6 @@ public struct Footer: View {
     }
 }
 
-
-
-
-
 // Small, legible badge used on the Wallet pill
 private struct CoinBadge: View {
     let coins: Int
@@ -187,24 +210,20 @@ private struct CoinBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13, weight: .heavy, design: .rounded)) // bigger than 11
+            .font(.system(size: 13, weight: .heavy, design: .rounded))
             .foregroundStyle(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .background(
-                Capsule().fill(Color(red: 0.95, green: 0.23, blue: 0.24)) // rich red
+                Capsule().fill(Color(red: 0.95, green: 0.23, blue: 0.24))
             )
             .overlay(
-                Capsule().stroke(.white.opacity(0.75), lineWidth: 0.5) // subtle ring
+                Capsule().stroke(.white.opacity(0.75), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
             .minimumScaleFactor(0.8)
     }
 }
-
-
-
-
 
 // MARK: - Labeled pill with optional badge
 
@@ -275,4 +294,26 @@ struct WalletTargetKey: PreferenceKey {
 }
 private extension CGRect { var center: CGPoint { CGPoint(x: midX, y: midY) } }
 
+//// MARK: - Boosts button frame preference (shared by Footer & TutorialWorldView)
+//public struct BoostsButtonFrameKey: PreferenceKey {
+//    public static var defaultValue: CGRect? = nil
+//    public static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+//        value = nextValue() ?? value
+//    }
+//}
 
+//struct BouncyArrowDownSimple: View {
+//    @State private var phase: CGFloat = 0
+//    var body: some View {
+//        Image(systemName: "arrow.down.circle.fill")
+//            .font(.system(size: 34, weight: .bold))
+//            .foregroundStyle(.orange)
+//            .shadow(radius: 4, y: 2)
+//            .offset(y: phase)
+//            .onAppear {
+//                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+//                    phase = 10
+//                }
+//            }
+//    }
+//}
