@@ -1,9 +1,3 @@
-//
-//  BoostCenterView.swift
-//  Tetrad
-//
-//  Created by kevin nations on 9/27/25.
-//
 import SwiftUI
 
 struct BoostCenterView: View {
@@ -20,10 +14,15 @@ struct BoostCenterView: View {
                 Section {
                     HStack {
                         Image(systemName: "bolt.fill")
-                        Text("Daily Boosts")
+                        Text("Boosts")
                         Spacer()
-                        Text("\(boostsRemainingText)")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(boosts.totalAvailable) available")
+                                .foregroundStyle(.secondary)
+                            Text("(\(boosts.purchased) purchased • \(boosts.remaining) daily)")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
 
@@ -47,13 +46,12 @@ struct BoostCenterView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    .disabled(boosts.remaining == 0)
+                    // ✅ Do not gate on `remaining` — purchased must work
+                    .disabled(boosts.totalAvailable == 0)
                 }
 
                 if let errorText {
-                    Section {
-                        Text(errorText).foregroundStyle(.red)
-                    }
+                    Section { Text(errorText).foregroundStyle(.red) }
                 }
             }
             .navigationTitle("Boosts")
@@ -67,44 +65,26 @@ struct BoostCenterView: View {
                 isPresented: $confirmSmartBoost,
                 titleVisibility: .visible
             ) {
-                Button("Use Boost (adds +10 moves)", role: .none) {
-                    useSmartBoost()
-                }
+                Button("Use Boost (adds +10 moves)") { useSmartBoost() }
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("This will place 1 correct tile and add +10 to your Moves.")
             }
+            // Clear any stale error when dialog visibility changes
+            .onChange(of: confirmSmartBoost) { _, _ in errorText = nil }
         }
-    }
-
-    private var boostsRemainingText: String {
-        boosts.remaining > 0 ? "\(boosts.remaining) remaining" : "None left • New in 24h"
     }
 
     private func useSmartBoost() {
         guard boosts.useOne() else {
-            self.errorText = "No Boosts left."
+            errorText = "No Boosts left."
             return
         }
-        let success = game.applySmartBoost(movePenalty: 10)
-        if !success {
-            // Refund if nothing could be placed
-            _ = refundOneBoost()
-            self.errorText = "No safe placement found. Try adjusting the board first."
-        } else {
+        if game.applySmartBoost(movePenalty: 10) {
             dismiss()
+        } else {
+            // (Optional) If you add a refund API on BoostsService, call it here.
+            errorText = "No safe placement found. Try adjusting the board first."
         }
     }
-
-    private func refundOneBoost() -> Bool {
-        // Quick, safe refund (not exposed; just internal correction)
-        // Note: We keep this simple; if you want strict integrity, move this logic into BoostsService.
-        // (You asked for minimal code; this keeps it local.)
-        let newVal = min(boosts.remaining + 1, 3)
-        // Hacky but fine: write directly via KVC-ish approach
-        // Better: add a method on BoostsService to refund safely.
-        // For brevity, we’ll just let the lack of a refund be acceptable if you prefer.
-        return newVal != boosts.remaining // (optional: implement properly later)
-    }
 }
-

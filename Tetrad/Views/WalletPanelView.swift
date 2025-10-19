@@ -80,18 +80,19 @@ struct WalletPanelView: View {
 
     // MARK: - Actions
 
+
     private func buyReveal(cost: Int, count: Int) {
-        if levels.coins >= cost {
-            levels.addCoins(-cost)
-            boosts.grant(count: count)
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            dismiss()
+        print("🛒 BUY (Wallet): cost=\(cost) count=\(count) coins(before)=\(levels.coins)")
+        if levels.buyBoost(cost: cost, count: count, boosts: boosts, haptics: true) {
+            print("✅ BUY OK (Wallet): purchased += \(count); daily=\(boosts.remaining) purchased=\(boosts.purchased)")
+            game.noteBoostPurchased(count: count)   // achievement counter
+            // dismiss if needed
         } else {
+            print("❌ BUY FAIL (Wallet): coins(after)=\(levels.coins) daily=\(boosts.remaining) purchased=\(boosts.purchased)")
             showInsufficientCoins = true
         }
     }
+
 
     private func addCoins(_ n: Int) {
         levels.addCoins(n)

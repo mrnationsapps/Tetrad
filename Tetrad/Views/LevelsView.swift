@@ -268,14 +268,14 @@ struct LevelsView: View {
 
     private func toggleWallet() { setWallet(!walletExpanded) }
 
-    private func buyRevealBoost(cost: Int, count: Int = 1) {
-        if levels.coins >= cost {
-            levels.addCoins(-cost)
-            boosts.grant(count: count)
-        } else {
-            showInsufficientCoins = true
-        }
-    }
+//    private func buyRevealBoost(cost: Int, count: Int = 1) {
+//        if levels.coins >= cost {
+//            levels.addCoins(-cost)
+//            boosts.grant(count: count)
+//        } else {
+//            showInsufficientCoins = true
+//        }
+//    }
 
     private func simulateIAPPurchase(coins: Int) {
         levels.addCoins(coins)

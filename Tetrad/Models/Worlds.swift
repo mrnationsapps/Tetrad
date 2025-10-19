@@ -23,7 +23,7 @@ enum WorldsCatalog {
               name: "Tutorial",
               artName: "Tutorial",
               unlockCost: 0,
-              dictionaryID: "Adjectives_Dictionary",   // or your own tutorial list
+              dictionaryID: "Adjectives_Dictionary",
               isTutorial: true),
 
         World(id: "food",
@@ -44,7 +44,7 @@ enum WorldsCatalog {
               name: "Nature",
               artName: "Nature",
               unlockCost: 12,
-              dictionaryID: "Plants_Dictionary",       // ← matches your file list
+              dictionaryID: "Plants_Dictionary",
               isTutorial: false),
 
         World(id: "holidays",
@@ -58,7 +58,7 @@ enum WorldsCatalog {
               name: "Retro",
               artName: "Retro",
               unlockCost: 14,
-              dictionaryID: "Adjectives_Dictionary",   // pick a file to use for now
+              dictionaryID: "Adjectives_Dictionary",
               isTutorial: false),
 
         World(id: "travel",
@@ -95,7 +95,8 @@ struct WorldsBoostsPanel: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(boosts.remaining) left")
+                // Purchased-only model: show how many the player owns
+                Text("\(boosts.purchased) owned")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -106,7 +107,10 @@ struct WorldsBoostsPanel: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(.thinMaterial)
                         .frame(width: 88, height: 88)
-                        .overlay(Image(systemName: "wand.and.stars").font(.system(size: 28, weight: .semibold)))
+                        .overlay(
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 28, weight: .semibold))
+                        )
                     Text("Reveal")
                         .font(.footnote.weight(.semibold))
                 }
@@ -126,10 +130,14 @@ struct WorldsBoostsPanel: View {
     }
 }
 
+
+
 // MARK: - Wallet panel for Worlds (buy boosts + coins)
 struct WorldsWalletPanel: View {
     @EnvironmentObject var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
+    @EnvironmentObject var game: GameState      // ← added so we can tick achievements
+
     var dismiss: () -> Void
 
     @State private var showInsufficientCoins = false
@@ -176,17 +184,19 @@ struct WorldsWalletPanel: View {
 
     // MARK: actions
     private func buyReveal(cost: Int, count: Int) {
-        if levels.coins >= cost {
-            levels.addCoins(-cost)
-            boosts.grant(count: count)
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
+        // Centralized buy: deduct coins + add to purchased pool (persists)
+        if levels.buyBoost(cost: cost, count: count, boosts: boosts, haptics: true) {
+            // If the app hasn't wired BoostsService.onBoostPurchased -> GameState,
+            // tick the achievement counter here to be safe (avoid double-counting).
+            if boosts.onBoostPurchased == nil {
+                game.noteBoostPurchased(count: count)
+            }
             dismiss()
         } else {
             showInsufficientCoins = true
         }
     }
+
     private func addCoins(_ n: Int) {
         levels.addCoins(n)
         #if os(iOS)

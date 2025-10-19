@@ -15,6 +15,8 @@ public enum FooterDisabledStyle {
 
 public struct Footer: View {
     @EnvironmentObject private var levels: LevelsService
+    @EnvironmentObject var boosts: BoostsService
+
     private var coinDisplay: Int { coins ?? levels.coins }
 
     public var coins: Int? = nil
@@ -144,7 +146,7 @@ public struct Footer: View {
                 LabeledPill(
                     title: "Boosts",
                     systemImage: "sparkles",
-                    badgeCount: boostsAvailable
+                    badgeCount: boosts.totalAvailable
                 )
                 .accessibilityLabel(Text("Open Boosts"))
             }

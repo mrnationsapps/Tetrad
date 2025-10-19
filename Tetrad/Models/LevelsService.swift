@@ -306,3 +306,25 @@ extension LevelsService {
         return (base + bonus, base, bonus)
     }
 }
+
+// MARK: - Centralized “buy boost with coins” helper — no GameState dependency
+extension LevelsService {
+    @discardableResult
+    @MainActor
+    func buyBoost(
+        cost: Int,
+        count: Int = 1,
+        boosts: BoostsService,
+        haptics: Bool = true
+    ) -> Bool {
+        guard coins >= cost else { return false }
+        addCoins(-cost)
+        boosts.purchase(count: count)   // ✅ persistent purchased pool
+        #if os(iOS)
+        if haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        #endif
+        return true
+    }
+}
+
+

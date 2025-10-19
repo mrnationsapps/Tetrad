@@ -8,101 +8,82 @@
 import Foundation
 import Combine
 
+@MainActor
 final class BoostsService: ObservableObject {
-    // Daily allowance (resets each UTC day)
-    private let dailyAllowance = 3
-
-    // UserDefaults keys
-    private let keyRemaining     = "boosts.remaining"      // daily bucket
-    private let keyPurchased     = "boosts.purchased"      // persistent purchases
-    private let keyLastResetUTC  = "boosts.lastResetUTC"   // yyyy-MM-dd (UTC)
+    // 🛑 Purchased-only model: no daily freebies.
+    // We keep `remaining` for UI compatibility but it is always 0.
+    private let keyPurchased     = "boosts.purchased"     // persistent purchases
+    private let keyLastResetUTC  = "boosts.lastResetUTC"  // yyyy-MM-dd (UTC)
+    private let legacyKeyRemaining = "boosts.remaining"   // legacy daily bucket (ignore)
 
     // Live state
-    @Published private(set) var remaining: Int   // daily bucket
-    @Published private(set) var purchased: Int   // purchased bucket (persists, no daily reset)
+    @Published private(set) var purchased: Int
+    @Published private(set) var remaining: Int = 0  // legacy, always 0
 
-    // Callbacks (wired from App): fire on main after use/purchase
+    // Callbacks (wired from App)
     var onBoostUsed: (() -> Void)?
     var onBoostPurchased: ((Int) -> Void)?
 
     // MARK: - Init
     init() {
         let d = UserDefaults.standard
-
         // Load purchased (defaults to 0)
         self.purchased = max(0, d.integer(forKey: keyPurchased))
 
-        // Load remaining; default to full allowance on first launch
-        if d.object(forKey: keyRemaining) == nil {
-            self.remaining = dailyAllowance
-            d.set(self.remaining, forKey: keyRemaining)
-        } else {
-            self.remaining = max(0, d.integer(forKey: keyRemaining))
+        // 🔧 Migration: if a legacy daily value exists, zero it out.
+        if d.object(forKey: legacyKeyRemaining) != nil {
+            d.set(0, forKey: legacyKeyRemaining)
         }
 
-        // Ensure daily reset semantics are applied at startup
+        // Stamp the day so resetIfNeeded remains harmless
+        persist()
         resetIfNeeded()
+
+        #if DEBUG
+        print("🟣 BoostsService init (purchased-only) purch=\(purchased)")
+        #endif
     }
 
     // MARK: - Public API
 
-    /// Total usable boosts (daily + purchased).
-    var totalAvailable: Int { remaining + purchased }
+    /// Total usable boosts (purchased-only model).
+    var totalAvailable: Int { purchased }
 
-    /// Spend one boost if available. Prefers daily, then purchased.
-    /// Returns true if a boost was consumed.
+    /// Spend one boost if available (consumes **purchased** first).
     @discardableResult
     func useOne() -> Bool {
-        guard totalAvailable > 0 else { return false }
-
-        if remaining > 0 {
-            if Thread.isMainThread { remaining -= 1 }
-            else { DispatchQueue.main.async { self.remaining -= 1 } }
-        } else {
-            // daily is 0, draw from purchased
-            if Thread.isMainThread { purchased -= 1 }
-            else { DispatchQueue.main.async { self.purchased -= 1 } }
-        }
-
+        guard purchased > 0 else { return false }
+        purchased -= 1
         persist()
-
-        // Notify on main
-        if Thread.isMainThread { onBoostUsed?() }
-        else { DispatchQueue.main.async { self.onBoostUsed?() } }
-
+        onBoostUsed?()
+        #if DEBUG
+        print("🟣 useOne OK → purch=\(purchased)")
+        #endif
         return true
     }
 
-    /// Grant free boosts to the **daily** bucket (e.g., rewards).
+    /// Grant free boosts to the purchased pool (rewards/promo).
     func grant(count: Int) {
-        guard count > 0 else { return }
-        if Thread.isMainThread { remaining += count }
-        else { DispatchQueue.main.async { self.remaining += count } }
-        persist()
+        purchase(count: count)
     }
 
-    /// Add boosts to the **purchased** pool (e.g., IAP or shop).
+    /// Add boosts to the purchased pool (IAP or wallet buys).
     func purchase(count: Int) {
         guard count > 0 else { return }
-        if Thread.isMainThread { purchased += count }
-        else { DispatchQueue.main.async { self.purchased += count } }
+        purchased += count
         persist()
-
-        // Notify on main with how many were added
-        if Thread.isMainThread { onBoostPurchased?(count) }
-        else { DispatchQueue.main.async { self.onBoostPurchased?(count) } }
+        onBoostPurchased?(count)
+        #if DEBUG
+        print("🟣 purchase(+\(count)) → purch=\(purchased)")
+        #endif
     }
 
-    /// Call on app launch and when app becomes active.
-    /// If the stored day != today (UTC), resets the daily bucket to the allowance.
+    /// Keep the stored UTC day up to date; no daily refill.
     func resetIfNeeded(date: Date = Date()) {
         let todayUTC = Self.utcDayString(date: date)
         let d = UserDefaults.standard
         let last = d.string(forKey: keyLastResetUTC)
-
         if last != todayUTC {
-            if Thread.isMainThread { remaining = dailyAllowance }
-            else { DispatchQueue.main.async { self.remaining = self.dailyAllowance } }
             d.set(todayUTC, forKey: keyLastResetUTC)
             persist()
         }
@@ -112,9 +93,7 @@ final class BoostsService: ObservableObject {
 
     private func persist() {
         let d = UserDefaults.standard
-        d.set(remaining, forKey: keyRemaining)
         d.set(purchased, forKey: keyPurchased)
-        // keep lastResetUTC up to date
         d.set(Self.utcDayString(date: Date()), forKey: keyLastResetUTC)
     }
 

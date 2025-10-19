@@ -593,6 +593,7 @@ final class GameState: ObservableObject {
 
     func noteBoostPurchased(count: Int = 1) {
         boostsPurchasedTotal += count
+        print("🧮 boostsPurchasedTotal = \(boostsPurchasedTotal) (+\(count))")
         saveAchievementTotals()
     }
 

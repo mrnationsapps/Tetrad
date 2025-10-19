@@ -14,30 +14,34 @@ struct TetradApp: App {
 
     var body: some Scene {
         WindowGroup {
-            
             RootView()
                 // Core environment objects
                 .environmentObject(game)
                 .environmentObject(boosts)
                 .environmentObject(levels)
-//                .environmentObject(ToastCenter.shared)
 
                 // Debug-only flags
                 #if DEBUG
                 .environmentObject(debugFlags)
                 #endif
 
-                .onAppear {
+                // Wire callbacks & do one-time startup work once the objects are installed
+                .task { @MainActor in
+                    // Initial sync
                     boosts.resetIfNeeded()
                     levels.loadProgressIfNeeded()
-                    
-                    // Load totals on launch
                     game.loadAchievementTotals()
 
-                    // 🔗 existing callbacks...
-                    boosts.onBoostUsed = { game.noteBoostUsed() }
-                    boosts.onBoostPurchased = { count in game.noteBoostPurchased(count: count) }
-                    levels.onWorldUnlocked = { _ in game.noteWorldUnlocked() }
+                    // Wire cross-object callbacks exactly once
+                    boosts.onBoostUsed = { [weak game] in
+                        Task { @MainActor in game?.noteBoostUsed() }
+                    }
+                    boosts.onBoostPurchased = { [weak game] count in
+                        Task { @MainActor in game?.noteBoostPurchased(count: count) }
+                    }
+                    levels.onWorldUnlocked = { [weak game] _ in
+                        Task { @MainActor in game?.noteWorldUnlocked() }
+                    }
 
                     // Hotfix sync: reflect currently unlocked (non-tutorial) worlds into the counter
                     let nonTutorialUnlocked = levels.unlockedIDs.filter { $0 != "tutorial" }.count
@@ -46,7 +50,6 @@ struct TetradApp: App {
                         game.saveAchievementTotals()
                     }
                 }
-
         }
         .onChange(of: scenePhase) { phase in
             if phase == .active {

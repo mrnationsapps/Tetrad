@@ -1,7 +1,6 @@
 import SwiftUI
 
 // Cell size environment for board/bag responsiveness.
-// Put this at top-level in an existing file.
 struct CellSizeKey: EnvironmentKey { static let defaultValue: CGFloat = 64 }
 
 extension EnvironmentValues {
@@ -9,6 +8,11 @@ extension EnvironmentValues {
         get { self[CellSizeKey.self] }
         set { self[CellSizeKey.self] = newValue }
     }
+}
+
+private struct StageFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 struct ContentView: View {
@@ -55,6 +59,18 @@ struct ContentView: View {
     @State private var isDraggingGhost = false
     @State private var ghostTile: LetterTile? = nil
     @State private var ghostStagePoint: CGPoint = .zero   // in "stage" coords
+    
+    // Publish all 16 cell rects (in "stage" space)
+    private struct CellRectsKey: PreferenceKey {
+        static var defaultValue: [BoardCoord: CGRect] = [:]
+        static func reduce(value: inout [BoardCoord: CGRect], nextValue: () -> [BoardCoord: CGRect]) {
+            // merge – later values win
+            value.merge(nextValue(), uniquingKeysWith: { _, rhs in rhs })
+        }
+    }
+
+    // Hold the live map
+    @State private var cellStageRects: [BoardCoord: CGRect] = [:]
 
 //    @State private var activeDragID: UUID? = nil   // backup for stage-level .onEnded
 
@@ -72,10 +88,32 @@ struct ContentView: View {
             Color.softSandSat.ignoresSafeArea()
             VStack(spacing: 20) {
                 header
-                boardView
-                underBoardRegion
+
+                GeometryReader { g in
+                    let boardH = g.size.height * 0.68   // tweak to 0.70 for 70/30
+                    let bagH   = g.size.height - boardH
+
+                    VStack(spacing: 12) {
+                        ZStack { boardView }
+                            .frame(height: boardH)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                        underBoardRegion(targetHeight: bagH)
+                            .frame(height: bagH)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, {
+                                #if os(iOS)
+                                UIDevice.current.userInterfaceIdiom == .pad ? 20 : 0
+                                #else
+                                0
+                                #endif
+                            }())
+                    }
+                }
             }
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .coordinateSpace(name: "stage")
+            
 
             // Ghost Tile
             if let id = draggingTileID,
@@ -114,8 +152,6 @@ struct ContentView: View {
                 .transition(.scale.combined(with: .opacity))
             }
             
-//            ToastHost()
-//                .environmentObject(ToastCenter.shared)
         }
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
         .overlay(alignment: .topLeading) {
@@ -208,7 +244,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(boosts.remaining) left")
+                    Text("\(boosts.totalAvailable) available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -220,8 +256,8 @@ struct ContentView: View {
                         BoostTile(icon: "wand.and.stars", title: "Reveal")
                     }
                     .buttonStyle(.plain)
-                    .disabled(boosts.remaining == 0)
-                    .opacity(boosts.remaining == 0 ? 0.4 : 1.0)
+                    .disabled(boosts.totalAvailable == 0)
+                    .opacity(boosts.totalAvailable == 0 ? 0.4 : 1.0)
                     .alignmentGuide(.top) { d in d[.top] }
 
                     // Placeholders
@@ -236,7 +272,9 @@ struct ContentView: View {
                 }
 
                 if let errorText {
-                    Text(errorText).font(.footnote).foregroundStyle(.red)
+                    Text(errorText)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
                         .padding(.top, 6)
                 }
             }
@@ -244,14 +282,13 @@ struct ContentView: View {
         }
 
         private func useSmartBoost() {
-            guard boosts.remaining > 0 else {
+            guard boosts.totalAvailable > 0 else {
                 errorText = "No Boosts left."
                 return
             }
 
             // Try placing first; only consume if it worked
-            let success = game.applySmartBoost(movePenalty: 10)
-            if success {
+            if game.applySmartBoost(movePenalty: 10) {
                 _ = boosts.useOne()
                 #if os(iOS)
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -277,12 +314,13 @@ struct ContentView: View {
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.white.opacity(0.14))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                    )
             )
         }
     }
-
     
     // MARK: - Header / Footer
 
@@ -292,41 +330,23 @@ struct ContentView: View {
                 Spacer()
                 Text("Moves: \(game.moveCount)").bold()
                     .foregroundStyle(Color.black)
+                    .padding(.trailing, 24)
             }
         }
     }
 
-    // MARK: - Shared region (Bag <-> Boosts) with horizontal slide
+    // MARK: - Shared region (Bag <-> Boosts)
     @ViewBuilder
-    private var underBoardRegion: some View {
-        GeometryReader { regionGeo in
-            let W = regionGeo.size.width
-            ZStack(alignment: .bottomTrailing) {
-                HStack(spacing: 0) {
-                    // Letters (bag)
-                    tileBag
-                        .frame(width: W)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear  {
-                                        bagHeight = geo.size.height
-                                    }
-                                    .onChange(of: geo.size) { oldSize, newSize in
-                                        bagHeight = newSize.height
-                                    }
+    private func underBoardRegion(targetHeight: CGFloat) -> some View {
+        VStack(spacing: 12) {
+            // controlsRow() // if you have wallet/boosts, put it here
 
-                            }
-                        )
-
-                }
-
-            }
+            tileBag(targetHeight: targetHeight)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        // Keep a stable height so bag/panel occupy identical vertical space
-        .frame(height: max(bagHeight, boostsHeight))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
-
 
     // Reusable tile view (top-aligned content inside a fixed 72×72)
     @ViewBuilder
@@ -341,8 +361,7 @@ struct ContentView: View {
         .alignmentGuide(.top) { d in d[.top] }           // 👈 report our own top
     }
 
-    // MARK: - Board (responsive, centered)
-
+    // MARK: - Board (responsive, centered, correct drop mapping)
     private var boardView: some View {
         GeometryReader { geo in
             let gap  = boardGap
@@ -351,68 +370,170 @@ struct ContentView: View {
             let cell = max(36, base * tileScale)
             let boardSize = (4 * cell) + (3 * gap)
 
-            // The *board container* – sized to the exact square we need
+            // The board container is a fixed square we can center
             let board = ZStack(alignment: .topLeading) {
                 boardGrid(cell: cell, gap: gap, boardSize: boardSize)
             }
             .frame(width: boardSize, height: boardSize)
-            // measure the board container itself (not the outer geo)
             .background(
                 GeometryReader { inner in
                     Color.clear
-                        .onAppear {
-                            currentBoardCell   = cell
-                            boardGap           = gap
-                            boardOriginInStage = inner.frame(in: .named("stage")).origin
-                            boardRect          = inner.frame(in: .named("stage"))
-                        }
-                        .onChange(of: inner.size) { _, _ in
-                            currentBoardCell   = cell
-                            boardGap           = gap
-                            boardOriginInStage = inner.frame(in: .named("stage")).origin
-                            boardRect          = inner.frame(in: .named("stage"))
-                        }
+                        .preference(key: StageFrameKey.self,
+                                    value: inner.frame(in: .named("stage")))
                 }
             )
+            .onPreferenceChange(CellRectsKey.self) { rects in
+                cellStageRects = rects
+            }
+            .onPreferenceChange(StageFrameKey.self) { rect in
+                boardRect = rect
+                boardOriginInStage = rect.origin
+                currentBoardCell = cell
+                boardGap = gap
+            }
 
-            // Center the board container within all available space
+            // Center the board in all available space
             ZStack { board }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .onAppear {
-                    // If you want to re-show Daily win popup when returning
                     if !game.isLevelMode, game.solved {
                         withAnimation(.spring()) { showWinPopup = true }
                     }
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)   // ← apply here so parents can’t “eat” trailing padding
     }
 
 
-    // MARK: - Tile bag (adaptive, responsive)
-    private var tileBag: some View {
+
+
+    private func bestBagFit(width W: CGFloat,
+                            targetHeight: CGFloat,
+                            total: Int,
+                            gap: CGFloat,
+                            minEdge: CGFloat,
+                            maxEdge: CGFloat) -> (cols: Int, rows: Int, edge: CGFloat) {
+        var best: (cols: Int, rows: Int, edge: CGFloat)?
+
+        let maxCols = min(total, max(1, Int(floor((W + gap) / (minEdge + gap)))))
+
+        if maxCols >= 1 {
+            for cols in 1...maxCols {
+                let rows  = Int(ceil(Double(total) / Double(cols)))
+
+                let gapsW = CGFloat(cols - 1) * gap
+                let edgeW = (W - gapsW) / CGFloat(cols)
+
+                let gapsH = CGFloat(rows - 1) * gap
+                let edgeH = (targetHeight - gapsH) / CGFloat(rows)
+
+                var edge = floor(min(edgeW, edgeH))
+                edge = min(max(edge, minEdge), maxEdge)
+
+                let neededH = CGFloat(rows) * edge + gapsH
+                let fits = neededH <= targetHeight + 0.5
+
+                if fits {
+                    if let b = best {
+                        if edge > b.edge || (edge == b.edge && rows < b.rows) {
+                            best = (cols, rows, edge)
+                        }
+                    } else {
+                        best = (cols, rows, edge)
+                    }
+                }
+            }
+        }
+
+        // Fallback if nothing fit
+        if let b = best { return b }
+
+        let cols  = max(1, Int(floor((W + gap) / (minEdge + gap))))
+        let rows  = Int(ceil(Double(total) / Double(cols)))
+
+        let gapsW = CGFloat(cols - 1) * gap
+        let edgeW = (W - gapsW) / CGFloat(cols)
+        let gapsH = CGFloat(rows - 1) * gap
+        let edgeH = (targetHeight - gapsH) / CGFloat(rows)
+        let edge  = max(minEdge, floor(min(edgeW, edgeH)))
+
+        return (cols, rows, edge)
+    }
+
+    // MARK: - Tile bag that always fits all tiles (no scrolling)
+    private func tileBag(targetHeight: CGFloat) -> some View {
         let bagTiles = game.tiles.filter { $0.location == .bag }
 
-        // Make type explicit so the compiler doesn't struggle
-        let minEdge: CGFloat = bagTileSize
-        let maxEdge: CGFloat = max(bagTileSize, 160)
-        let columns: [GridItem] = [
-            GridItem(.adaptive(minimum: minEdge, maximum: maxEdge), spacing: bagGap, alignment: .center)
-        ]
+        #if os(iOS)
+        let isiPad = UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        let isiPad = false
+        #endif
 
-        return VStack(alignment: .leading, spacing: 8) {
+        // Bounds for tile edge size
+        let minEdge: CGFloat = 44                  // don’t go too tiny; tweak to taste
+        let maxEdge: CGFloat = isiPad ? 80 : 55   // allow bigger tiles on iPad
+
+        return VStack(alignment: .center, spacing: 8) {
             Text("Letter Bag")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: columns, spacing: bagGap) {
-                ForEach(bagTiles) { tile in
-                    bagTileCell(tile) // ← extracted cell keeps body simple
+            GeometryReader { geo in
+                let W        = max(1, geo.size.width)
+                let gap      = bagGap
+                let total    = max(1, game.tiles.count)   // usually 16
+
+                // Compute best fit (imperative logic kept out of ViewBuilder)
+                let fit = bestBagFit(width: W,
+                                     targetHeight: targetHeight,
+                                     total: total,
+                                     gap: gap,
+                                     minEdge: minEdge,
+                                     maxEdge: maxEdge)
+
+                let totalGapsW = CGFloat(fit.cols - 1) * gap
+                let gridWidth  = (CGFloat(fit.cols) * fit.edge) + totalGapsW
+
+                let columns: [GridItem] = Array(
+                    repeating: GridItem(.fixed(fit.edge), spacing: gap, alignment: .center),
+                    count: fit.cols
+                )
+
+                // No ScrollView → tiles must fit in targetHeight by construction
+                LazyVGrid(columns: columns, spacing: gap) {
+                    ForEach(bagTiles) { tile in
+                        GeometryReader { cellGeo in
+                            let origin = cellGeo.frame(in: .named("stage")).origin
+                            tileView(
+                                tile,
+                                cell: fit.edge,
+                                gap: boardGap,
+                                toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
+                                onDragBegan: {
+                                    if !isDraggingGhost {
+                                        ghostTile = tile
+                                        ghostSize = .init(width: fit.edge, height: fit.edge)
+                                        isDraggingGhost = true
+                                    }
+                                },
+                                onDragChanged: { stagePoint in
+                                    ghostStagePoint = stagePoint
+                                },
+                                onDragEnded: { stagePoint in
+                                    isDraggingGhost = false
+                                    handleDrop(of: tile, at: stagePoint)
+                                    ghostTile = nil
+                                }
+                            )
+                        }
+                        .frame(width: fit.edge, height: fit.edge)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .overlay(
-                Group {
+                .frame(width: gridWidth, height: targetHeight, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .overlay(alignment: .center) {
                     if bagTiles.isEmpty {
                         Text("Letter bag empty")
                             .font(.callout)
@@ -422,19 +543,15 @@ struct ContentView: View {
                             .allowsHitTesting(false)
                             .transition(.opacity)
                     }
-                },
-                alignment: .center
-            )
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 1)
         }
         .contentShape(Rectangle())
-        .background(
-            GeometryReader { bagGeo in
-                Color.clear
-                    .onAppear  { bagGridWidth = bagGeo.size.width }
-                    .onChange(of: bagGeo.size) { _, _ in bagGridWidth = bagGeo.size.width }
-            }
-        )
     }
+
+
+
 
     // Single bag grid cell (square, responsive). Kept small so type-checking is fast.
     @ViewBuilder
@@ -511,16 +628,15 @@ struct ContentView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.softSandSat)
-                    .softRaised(corner: 12) // keep the bevel
-                    // ↑ add contrasty border(s):
+                    .softRaised(corner: 12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.22), lineWidth: 1) // darker outer ring
+                            .stroke(Color.black.opacity(0.22), lineWidth: 1)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .inset(by: 0.5)
-                            .stroke(Color.white.opacity(0.55), lineWidth: 0.5) // subtle inner highlight
+                            .stroke(Color.white.opacity(0.55), lineWidth: 0.5)
                             .blendMode(.overlay)
                     )
 
@@ -550,7 +666,7 @@ struct ContentView: View {
                             ghostTile = nil
                         }
                     )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)   // fill cell
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     Color.clear
                 }
@@ -564,9 +680,19 @@ struct ContentView: View {
                     selectedTileID = nil
                 }
             }
+            // ⬇️ publish this cell’s rect in "stage" space for precise hit-testing
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(
+                        key: CellRectsKey.self,
+                        value: [coord: g.frame(in: .named("stage"))]
+                    )
+                }
+            )
         }
         .frame(width: cell, height: cell)
     }
+
 
     // MARK: - Tile view with instant drag
 
@@ -598,7 +724,7 @@ struct ContentView: View {
         }()
         let border: Color = isLocked ? Color.white.opacity(0.25)
                                      : Color.black.opacity(0.08)
-        let textColor: Color = isLocked ? .white : .primary
+        let textColor: Color = isLocked ? .white : .black
         let fontSz = max(22, cell * 0.50)
 
         // Base tile face (no gesture yet)
@@ -882,30 +1008,30 @@ struct ContentView: View {
     // MARK: - Drag/drop helpers
 
     private func handleDrop(of tile: LetterTile, at stagePoint: CGPoint) {
-        // 1) Try snapping to the 4×4 board first
-        let localPoint = CGPoint(
-            x: stagePoint.x - boardRect.minX,
-            y: stagePoint.y - boardRect.minY
-        )
-
-        if let coord = coordFrom(
-            pointInBoard: localPoint,
-            cell: currentBoardCell,
-            gap: boardGap
-        ) {
+        // 1) Exact hit on a cell? Place there.
+        if let coord = coordFromStageByRects(stagePoint) {
             game.placeTile(tile, at: coord)
             return
         }
 
-        // 2) Not a board drop → if the tile originated ON the board, return it to the bag.
-        //    (No reliance on bagRect; works when dropping directly on top of bag tiles, in gaps, anywhere.)
+        // 2) No exact hit: if the touch is inside (or very near) the board rect,
+        //    snap to the nearest cell center so small vertical offsets or gap hits still place.
+        let snapInset: CGFloat = -8  // allow a small “near the edge” tolerance
+        let snapRect = boardRect.insetBy(dx: snapInset, dy: snapInset)
+
+        if snapRect.contains(stagePoint), let coord = nearestCoordByCenter(stagePoint) {
+            game.placeTile(tile, at: coord)
+            return
+        }
+
+        // 3) Outside the board → if the tile originated ON the board, return to bag.
         if case .board(let prev) = tile.location {
             game.removeTile(from: prev)
         }
-
-        // 3) If the tile originated in the bag and we didn't hit the board,
-        //    do nothing (it stays in the bag).
+        // If it originated in the bag and wasn’t dropped over the board, do nothing.
     }
+
+
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
         // Convert from the shared "stage" space to the board’s local space
@@ -937,6 +1063,29 @@ struct ContentView: View {
 
         guard let col = index(for: p.x), let row = index(for: p.y) else { return nil }
         return BoardCoord(row: row, col: col)
+    }
+
+    private func coordFromStageByRects(_ p: CGPoint) -> BoardCoord? {
+        for (coord, rect) in cellStageRects where rect.contains(p) {
+            return coord
+        }
+        return nil
+    }
+
+    private func nearestCoordByCenter(_ p: CGPoint) -> BoardCoord? {
+        guard !cellStageRects.isEmpty else { return nil }
+        var best: (coord: BoardCoord, d2: CGFloat)?
+        for (coord, rect) in cellStageRects {
+            let cx = rect.midX
+            let cy = rect.midY
+            let dx = cx - p.x
+            let dy = cy - p.y
+            let d2 = dx*dx + dy*dy
+            if best == nil || d2 < best!.d2 {
+                best = (coord, d2)
+            }
+        }
+        return best?.coord
     }
 
 }

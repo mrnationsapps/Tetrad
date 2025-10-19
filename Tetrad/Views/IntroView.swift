@@ -17,40 +17,84 @@ struct IntroView: View {
     @State private var lastAwardedCoins = 0
     @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
 
-//    // Toast gate
-//    @State private var didShowRewardToastThisSession = false
-
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.softSandSat.ignoresSafeArea()
+        ZStack {
+            // ✅ Full-bleed background outside the NavigationStack
+            Color.softSandSat.ignoresSafeArea()
 
-                // Main content
-                VStack(spacing: 20) {
-                    header
-                    achievementsSection
+            NavigationStack {
+                ZStack {
+                    // (No background color here — keep it transparent)
+                    VStack(spacing: 20) {
+                        header
+                        achievementsSection
+                    }
+
+                    // Lottie coin overlay
+                    rewardOverlayLayer
+                }
+                .padding(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                .safeAreaInset(edge: .bottom) { bottomCTA }
+                .navigationDestination(isPresented: $navigateToGame) {
+                    ContentView()
+                        .environmentObject(game)
+                }
+                .navigationDestination(isPresented: $navigateToLevels) {
+                    LevelsView()
+                        .environmentObject(game)
                 }
 
-                // Lottie coin overlay
-                rewardOverlayLayer
+                // Paint over any stray 1-px separator (make it a tad thicker)
+                .overlay(alignment: .top) {
+                    Color.softSandSat
+                        .frame(height: 4)                // was 2; bump to 4 to cover sub-pixel seams
+                        .ignoresSafeArea(edges: .top)
+                }
+
+                // Belt & suspenders nav appearance
+                .onAppear {
+                    let appearance = UINavigationBarAppearance()
+                    appearance.configureWithOpaqueBackground()
+                    appearance.backgroundColor = UIColor(Color.softSandSat)
+                    appearance.backgroundEffect = nil
+                    appearance.shadowColor = .clear
+                    appearance.shadowImage = UIImage()
+
+                    let nav = UINavigationBar.appearance()
+                    nav.standardAppearance   = appearance
+                    nav.compactAppearance    = appearance
+                    nav.scrollEdgeAppearance = appearance
+                    nav.isTranslucent        = false
+
+                    // Legacy shims
+                    nav.setBackgroundImage(UIImage(), for: .default)
+                    nav.shadowImage = UIImage()
+                }
             }
-            .padding(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
-            .safeAreaInset(edge: .bottom) { bottomCTA }
-            .navigationDestination(isPresented: $navigateToGame) {
-                ContentView()
-                    .environmentObject(game)
-            }
-            .navigationDestination(isPresented: $navigateToLevels) {
-                LevelsView()
-                    .environmentObject(game)
-            }
+            .background(Color.clear)
         }
         .onAppear {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = UIColor(Color.softSandSat)
+            appearance.backgroundEffect = nil
+            appearance.shadowColor = .clear      // iOS 15+
+            
+            let nav = UINavigationBar.appearance()
+            nav.standardAppearance   = appearance
+            nav.compactAppearance    = appearance
+            nav.scrollEdgeAppearance = appearance
+            nav.isTranslucent        = false
+
+            // Legacy shims that still matter on some versions
+            nav.setBackgroundImage(UIImage(), for: .default)
+            nav.shadowImage = UIImage()
+            
             achievements = Achievement.all
-            // (Toast removed — no session-gated reward prompt)
         }
 
     }
+
 }
 
 // MARK: - Chunks
@@ -66,7 +110,9 @@ private extension IntroView {
                 .font(.headline)
         }
         .foregroundStyle(Color.black)
-        .padding(.top, 28)
+        .padding(.top, 0)
+        //.background(Color.softSandSat)
+
     }
 
     var achievementsSection: some View {
@@ -87,7 +133,6 @@ private extension IntroView {
                             achievement: ach,
                             isUnlocked: ach.isUnlocked(using: game),
                             onClaimed: { coins in
-                                // Credit immediately, then play the coin overlay
                                 guard coins > 0 else { return }
                                 levels.addCoins(coins)
                                 lastAwardedCoins = coins
@@ -126,7 +171,6 @@ private extension IntroView {
             }
             .buttonStyle(SoftRaisedPillStyle(height: 52))
 
-            // ⬇️ Hide Daily until tutorial is completed
             if tutorialCompleted {
                 Button {
                     game.startDailyRun()
@@ -145,9 +189,9 @@ private extension IntroView {
         }
         .padding(.horizontal)
         .padding(.top, 8)
-        .background(Color.softSandSat.opacity(0.7))
+        // ✅ Make inset background solid to avoid any “white edge” halo
+        .background(Color.softSandSat)
     }
-
 
     @ViewBuilder
     var rewardOverlayLayer: some View {
@@ -156,8 +200,7 @@ private extension IntroView {
                 isPresented: $showCoinOverlay,
                 amount: lastAwardedCoins
             ) {
-                // Optional: any follow-up after the Lottie finishes
-                // e.g., ToastCenter.shared.show("Coins added to wallet")
+                // optional follow-up
             }
             .transition(.opacity)
             .zIndex(50)
@@ -169,7 +212,7 @@ private extension IntroView {
     }
 }
 
-// MARK: - Rows (file-private to this file)
+// MARK: - Rows (unchanged)
 struct AchievementRow: View {
     let achievement: Achievement
     let isUnlocked: Bool
@@ -187,23 +230,19 @@ struct AchievementRow: View {
 
         Group {
             if canClaim {
-                Button(action: claim) {
-                    core
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .accessibilityLabel(Text("Collect \(rewardAmount) coins"))
+                Button(action: claim) { core }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(Text("Collect \(rewardAmount) coins"))
             } else {
                 core
             }
         }
-        // shared card background
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.clear)
                 .softRaised(corner: 12)
         )
-        // ghost entire row when locked
         .opacity(isLockedRow ? 0.60 : 1.0)
         .saturation(isLockedRow ? 0.85 : 1.0)
         .grayscale(isLockedRow ? 0.20 : 0.0)
@@ -221,7 +260,6 @@ struct AchievementRow: View {
     @ViewBuilder
     private func rowCore(showCollectLabel: Bool) -> some View {
         HStack(spacing: 12) {
-            // LEFT ICON:
             if claimed {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 18, weight: .bold))
@@ -238,7 +276,6 @@ struct AchievementRow: View {
                     .accessibilityHidden(true)
             }
 
-            // TITLE + SUBTITLE
             VStack(alignment: .leading, spacing: 2) {
                 Text(achievement.title)
                     .font(.subheadline.bold())
@@ -252,7 +289,6 @@ struct AchievementRow: View {
 
             Spacer(minLength: 8)
 
-            // RIGHT SIDE: divider + “Collect!” when claimable
             if showCollectLabel {
                 ZStack(alignment: .leading) {
                     Rectangle()
