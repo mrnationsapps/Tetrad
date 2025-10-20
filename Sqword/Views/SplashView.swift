@@ -1,6 +1,6 @@
 //
 //  SplashView.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 9/26/25.
 //

@@ -1,6 +1,6 @@
 //
 //  LevelsService.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 9/28/25.
 //
@@ -275,7 +275,7 @@ extension LevelsService {
     @MainActor
     func seed(for world: World, levelIndex: Int) -> UInt64 {
         // Stable across installs/builds; different for each (world,id,level)
-        let s = "tetrad.level.v1|\(world.id)|L\(levelIndex)"
+        let s = "Sqword.level.v1|\(world.id)|L\(levelIndex)"
         var rng = SeededRNG(seedString: s)
         return rng.next()
     }

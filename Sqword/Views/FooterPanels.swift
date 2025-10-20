@@ -1,6 +1,6 @@
 //
 //  FooterPanels.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 10/5/25.
 //

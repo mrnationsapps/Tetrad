@@ -10,8 +10,8 @@ final class GameState: ObservableObject {
     @Published var invalidHighlights: Set<Int> = []   // indices 0..7 for rows/cols if needed
 
     @Published var moveCount: Int = 0
-    @Published var streak: Int = UserDefaults.standard.integer(forKey: "tetrad_streak")
-    @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "tetrad_lastSolvedUTC")
+    @Published var streak: Int = UserDefaults.standard.integer(forKey: "Sqword_streak")
+    @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "Sqword_lastSolvedUTC")
 
     // Level mode & World Word flags
     @Published var isLevelMode: Bool = false
@@ -43,7 +43,7 @@ final class GameState: ObservableObject {
     private var boostedLockedCoords: Set<String> = []        // persisted as "r,c" strings
 
     // MARK: - Private state
-    private let versionKey = "TETRAD_v1"
+    private let versionKey = "Sqword_v1"
     private var identity: PuzzleIdentity?
     private var lastSmartBoostCoord: BoardCoord? = nil
     private var solution: [String]? = nil                    // in-memory (rows)
@@ -141,7 +141,7 @@ final class GameState: ObservableObject {
             identity = PuzzleIdentity(dayUTC: currentUTCDateKey(date), bag: bag)
         } else {
             self.solution = nil
-            let fallback = Array("tetradwordpuzzlega".prefix(16))
+            let fallback = Array("Sqwordwordpuzzlega".prefix(16))
             identity = PuzzleIdentity(dayUTC: currentUTCDateKey(date), bag: String(fallback))
         }
         if let id = identity { Persistence.saveIdentity(id) }
@@ -237,7 +237,7 @@ final class GameState: ObservableObject {
     func newDailyPuzzle(date: Date = Date()) {
         NSLog("🟡 newDailyPuzzle() called for \(currentUTCDateKey(date))")
         let dict = DictionaryLoader.loadFourLetterWords()
-        NSLog("📚 Tetrad dictionary loaded: \(dict.count) words")
+        NSLog("📚 Sqword dictionary loaded: \(dict.count) words")
         if let id = identity { clearBoostLocks(for: id.dayUTC) }
         Persistence.clearForNewDay()
         generateNewDailyIdentity(date: date)
@@ -375,7 +375,7 @@ final class GameState: ObservableObject {
         utc.formatOptions = [.withFullDate]
         let d = utc.string(from: date)
         var lines: [String] = []
-        lines.append("Tetrad " + d)
+        lines.append("Sqword " + d)
         lines.append("✅ Solved in \(moveCount) moves")
         if streak > 0 { lines.append("🔥 \(streak)-day streak") }
         return lines.joined(separator: "\n")
@@ -465,8 +465,8 @@ final class GameState: ObservableObject {
             streak = 1
         }
         lastSolvedDateUTC = today
-        UserDefaults.standard.set(streak, forKey: "tetrad_streak")
-        UserDefaults.standard.set(lastSolvedDateUTC, forKey: "tetrad_lastSolvedUTC")
+        UserDefaults.standard.set(streak, forKey: "Sqword_streak")
+        UserDefaults.standard.set(lastSolvedDateUTC, forKey: "Sqword_lastSolvedUTC")
     }
 
     // MARK: - World-word helpers (completion / protection)
@@ -1026,7 +1026,7 @@ extension GameState {
 
 // MARK: - Boost lock persistence (by coord for Daily)
 extension GameState {
-    private func lockKey(for dayUTC: String) -> String { "tetrad_locks_\(dayUTC)" }
+    private func lockKey(for dayUTC: String) -> String { "Sqword_locks_\(dayUTC)" }
     private func coordKey(_ coord: BoardCoord) -> String { "\(coord.row),\(coord.col)" }
     private func parseCoordKey(_ s: String) -> BoardCoord? {
         let parts = s.split(separator: ",")

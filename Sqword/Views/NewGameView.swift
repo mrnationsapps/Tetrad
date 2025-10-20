@@ -1,6 +1,6 @@
 //
 //  NewGameView.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 9/10/25.
 //

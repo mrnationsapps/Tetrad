@@ -7,17 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7C741A802EA5A015002AE5F3 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C741A7F2EA5A015002AE5F3 /* StoreKit.framework */; };
 		7CF4BF532E9C6A9900540F3A /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 7CF4BF522E9C6A9900540F3A /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		7CA7C81A2E84F4340059B5A8 /* Tetrad.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tetrad.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7C741A7F2EA5A015002AE5F3 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		7CA7C81A2E84F4340059B5A8 /* Sqword.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sqword.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		7CA7C81C2E84F4340059B5A8 /* Tetrad */ = {
+		7CA7C81C2E84F4340059B5A8 /* Sqword */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Tetrad;
+			path = Sqword;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -28,16 +30,26 @@
 			buildActionMask = 2147483647;
 			files = (
 				7CF4BF532E9C6A9900540F3A /* Lottie in Frameworks */,
+				7C741A802EA5A015002AE5F3 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		7C741A7E2EA5A015002AE5F3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7C741A7F2EA5A015002AE5F3 /* StoreKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		7CA7C8112E84F4340059B5A8 = {
 			isa = PBXGroup;
 			children = (
-				7CA7C81C2E84F4340059B5A8 /* Tetrad */,
+				7CA7C81C2E84F4340059B5A8 /* Sqword */,
+				7C741A7E2EA5A015002AE5F3 /* Frameworks */,
 				7CA7C81B2E84F4340059B5A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -45,7 +57,7 @@
 		7CA7C81B2E84F4340059B5A8 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				7CA7C81A2E84F4340059B5A8 /* Tetrad.app */,
+				7CA7C81A2E84F4340059B5A8 /* Sqword.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,9 +65,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		7CA7C8192E84F4340059B5A8 /* Tetrad */ = {
+		7CA7C8192E84F4340059B5A8 /* Sqword */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 7CA7C8252E84F4350059B5A8 /* Build configuration list for PBXNativeTarget "Tetrad" */;
+			buildConfigurationList = 7CA7C8252E84F4350059B5A8 /* Build configuration list for PBXNativeTarget "Sqword" */;
 			buildPhases = (
 				7CA7C8162E84F4340059B5A8 /* Sources */,
 				7CA7C8172E84F4340059B5A8 /* Frameworks */,
@@ -66,14 +78,14 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				7CA7C81C2E84F4340059B5A8 /* Tetrad */,
+				7CA7C81C2E84F4340059B5A8 /* Sqword */,
 			);
-			name = Tetrad;
+			name = Sqword;
 			packageProductDependencies = (
 				7CF4BF522E9C6A9900540F3A /* Lottie */,
 			);
 			productName = Tetrad;
-			productReference = 7CA7C81A2E84F4340059B5A8 /* Tetrad.app */;
+			productReference = 7CA7C81A2E84F4340059B5A8 /* Sqword.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -92,7 +104,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 7CA7C8152E84F4340059B5A8 /* Build configuration list for PBXProject "Tetrad" */;
+			buildConfigurationList = 7CA7C8152E84F4340059B5A8 /* Build configuration list for PBXProject "Sqword" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -109,7 +121,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				7CA7C8192E84F4340059B5A8 /* Tetrad */,
+				7CA7C8192E84F4340059B5A8 /* Sqword */,
 			);
 		};
 /* End PBXProject section */
@@ -267,6 +279,7 @@
 				DEVELOPMENT_TEAM = 4996R2C7M6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sqword;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.word-games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -302,6 +315,7 @@
 				DEVELOPMENT_TEAM = 4996R2C7M6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Sqword;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.word-games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -328,7 +342,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		7CA7C8152E84F4340059B5A8 /* Build configuration list for PBXProject "Tetrad" */ = {
+		7CA7C8152E84F4340059B5A8 /* Build configuration list for PBXProject "Sqword" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7CA7C8232E84F4350059B5A8 /* Debug */,
@@ -337,7 +351,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7CA7C8252E84F4350059B5A8 /* Build configuration list for PBXNativeTarget "Tetrad" */ = {
+		7CA7C8252E84F4350059B5A8 /* Build configuration list for PBXNativeTarget "Sqword" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7CA7C8262E84F4350059B5A8 /* Debug */,

@@ -102,7 +102,7 @@ struct IntroView: View {
 private extension IntroView {
     var header: some View {
         VStack(spacing: 8) {
-            Text("TETRAD")
+            Text("Sqword")
                 .font(.system(size: 44, weight: .heavy, design: .rounded))
                 .tracking(3)
 

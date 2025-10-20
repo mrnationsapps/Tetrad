@@ -1,6 +1,6 @@
 //
 //  BoostsService.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 9/27/25.
 //

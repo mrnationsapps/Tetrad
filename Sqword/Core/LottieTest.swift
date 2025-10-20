@@ -1,6 +1,6 @@
 //
 //  LottieTest.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 10/12/25.
 //

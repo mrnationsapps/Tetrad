@@ -1,10 +1,14 @@
 import SwiftUI
+import StoreKit
+
 
 @main
-struct TetradApp: App {
+struct SqwordApp: App {
     @StateObject private var game   = GameState()
     @StateObject private var boosts = BoostsService()
     @StateObject private var levels = LevelsService()
+    @StateObject private var store = IAPManager()
+
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -19,6 +23,18 @@ struct TetradApp: App {
                 .environmentObject(game)
                 .environmentObject(boosts)
                 .environmentObject(levels)
+                .environmentObject(store)
+                .task {
+                    await store.loadProducts()
+                }
+                .onAppear {
+                    // Credit coins by productID for delayed updates:
+                    store.startTransactionListener { productID in
+                        if let sku = CoinProduct(rawValue: productID) {
+                            Task { @MainActor in levels.addCoins(sku.coinAmount) }
+                        }
+                    }
+                }
 
                 // Debug-only flags
                 #if DEBUG

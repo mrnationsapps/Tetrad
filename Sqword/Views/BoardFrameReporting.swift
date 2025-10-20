@@ -1,6 +1,6 @@
 //
 //  BoardFrameReporting.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 10/3/25.
 //

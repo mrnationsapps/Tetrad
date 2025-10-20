@@ -41,7 +41,7 @@ struct SeededRNG: RandomNumberGenerator {
 
     // MARK: - Daily helper
 
-    static func dailySeed(version: String = "TETRAD_v1", date: Date = Date()) -> SeededRNG {
+    static func dailySeed(version: String = "Sqword_v1", date: Date = Date()) -> SeededRNG {
         let utc = ISO8601DateFormatter()
         utc.timeZone = TimeZone(secondsFromGMT: 0)
         utc.formatOptions = [.withFullDate]

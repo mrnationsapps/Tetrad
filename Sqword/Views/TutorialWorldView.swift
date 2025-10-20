@@ -172,26 +172,35 @@ struct TutorialWorldView: View {
             }
         }
 
-        // Instruction callout (bottom)
-        .overlay(alignment: .bottomTrailing) {
+        // Instruction callout (bottom, centered)
+        .overlay(alignment: .bottom) {
             Group {
                 if let stepLine = l1StepContent {
-                    CalloutCard {
-                        numberedStep(stepLine.index, stepLine.text)
+                    HStack {
+                        Spacer()
+                        CalloutCard {
+                            numberedStep(stepLine.index, stepLine.text)
+                        }
+                        .frame(maxWidth: 520)
+                        Spacer()
                     }
-                    .frame(maxWidth: 420)
-                    .padding(.trailing, 0)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 120)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if step == .level2 {
-                    CalloutCard {
-                        Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.92))
+                    HStack {
+                        Spacer()
+                        CalloutCard {
+                            Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.white.opacity(0.92))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .frame(maxWidth: 520)
+                        Spacer()
                     }
-                    .frame(maxWidth: 420)
-                    .padding(.trailing, 0)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 120)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -199,6 +208,7 @@ struct TutorialWorldView: View {
                 }
             }
         }
+
 
         // Gate Boosts when Level 1 reaches “Tap Boosts…”
         .onChange(of: l1Step) { _, newStep in
@@ -347,7 +357,7 @@ private struct IntroLesson: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                (Text("TETRAD is based on the age-old \n")
+                (Text("Sqword is based on the age-old \n")
                  + Text("word square puzzle.").italic())
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)

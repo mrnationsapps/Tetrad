@@ -1,6 +1,6 @@
 //
 //  Persistence.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 9/25/25.
 
@@ -70,8 +70,8 @@ enum RunKey {
 
 
 enum PersistKeys {
-    static let identity = "tetrad.identity.v1"
-    static let runState = "tetrad.runState.v1"
+    static let identity = "Sqword.identity.v1"
+    static let runState = "Sqword.runState.v1"
 }
 
 enum Persistence {
@@ -106,7 +106,7 @@ enum Persistence {
 
     /// Prefix user defaults keys so they don't collide with anything else.
     private static func namespaced(_ slotKey: String) -> String {
-        "tetrad_run.\(slotKey)"
+        "Sqword_run.\(slotKey)"
     }
 
     /// Save a RunState for a specific slot key (e.g., "daily:2025-10-14" or "level:food:L3:S12345").

@@ -1,6 +1,6 @@
 //
 //  ResponsiveContainers.swift
-//  Tetrad
+//  Sqword
 //
 //  Created by kevin nations on 10/16/25.
 //

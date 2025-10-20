@@ -179,7 +179,7 @@ struct ContentView: View {
             
             if showHeader && enableDailyWinUI {
                 ToolbarItem(placement: .principal) {
-                    Text("TETRAD")
+                    Text("Sqword")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .tracking(1.5)
                         .foregroundStyle(Color.black)
