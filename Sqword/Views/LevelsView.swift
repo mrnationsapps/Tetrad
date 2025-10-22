@@ -5,6 +5,15 @@ private enum WorldRoute: Hashable {
     case level(World.ID)
 }
 
+//struct LevelsViewScreen: View {
+//    var body: some View {
+//        ZStack {
+//            
+//            
+//        }
+//    }
+//}
+
 struct LevelsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var game: GameState
@@ -31,7 +40,7 @@ struct LevelsView: View {
 
         // MAIN LAYOUT
         let main = ZStack {
-            Color.softSandSat.ignoresSafeArea()   // ← back layer
+//            Color.softSandSat.ignoresSafeArea()   // ← back layer
 
             // content
             VStack(spacing: 16) {
@@ -43,6 +52,7 @@ struct LevelsView: View {
             }
             .padding(.horizontal)
         }
+
 
         return main
             .navigationBarBackButtonHidden(true)
@@ -70,6 +80,8 @@ struct LevelsView: View {
 
 
             }
+            .toolbarBackground(.clear, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         
             // alerts
             .alert("Not enough coins", isPresented: $showInsufficientCoins) {
@@ -192,9 +204,6 @@ struct LevelsView: View {
             .frame(maxWidth: .infinity, minHeight: 200)
         }
     }
-
-
-
 
 
     @ViewBuilder

@@ -357,12 +357,11 @@ private struct IntroLesson: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                (Text("Sqword is based on the age-old \n")
-                 + Text("word square puzzle.").italic())
+                (Text("Sqword is a square word puzzle."))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-                Text("In a word square, the first column is equal to the first row. The second column is equal to the second row, etc.")
+                Text("The first column is equal to the first row. The second column, the second row, etc.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
 

@@ -20,8 +20,6 @@ struct IntroView: View {
     var body: some View {
         ZStack {
             // ✅ Full-bleed background outside the NavigationStack
-            Color.softSandSat.ignoresSafeArea()
-
             NavigationStack {
                 ZStack {
                     // (No background color here — keep it transparent)
@@ -44,13 +42,6 @@ struct IntroView: View {
                         .environmentObject(game)
                 }
 
-                // Paint over any stray 1-px separator (make it a tad thicker)
-                .overlay(alignment: .top) {
-                    Color.softSandSat
-                        .frame(height: 4)                // was 2; bump to 4 to cover sub-pixel seams
-                        .ignoresSafeArea(edges: .top)
-                }
-
                 // Belt & suspenders nav appearance
                 .onAppear {
                     let appearance = UINavigationBarAppearance()
@@ -71,8 +62,17 @@ struct IntroView: View {
                     nav.shadowImage = UIImage()
                 }
             }
-            .background(Color.clear)
+            .background {
+                Image("Sqword-Splash")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
+
         .onAppear {
             let appearance = UINavigationBarAppearance()
             appearance.configureWithOpaqueBackground()
@@ -111,7 +111,6 @@ private extension IntroView {
         }
         .foregroundStyle(Color.black)
         .padding(.top, 0)
-        //.background(Color.softSandSat)
 
     }
 
@@ -189,8 +188,6 @@ private extension IntroView {
         }
         .padding(.horizontal)
         .padding(.top, 8)
-        // ✅ Make inset background solid to avoid any “white edge” halo
-        .background(Color.softSandSat)
     }
 
     @ViewBuilder
