@@ -70,7 +70,7 @@ struct LevelsView: View {
     var body: some View {
 
         ZStack(alignment: .topLeading){
-            VStack{
+            HStack{
                 HStack{
                     
                     Button { dismiss() }
@@ -99,7 +99,7 @@ struct LevelsView: View {
                         .padding(.top, 44)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .offset(x: -50, y: 0)
+                        .offset(x: -45, y: 0)
 
                     Color.clear.frame(width: 60)
                 }
@@ -108,7 +108,7 @@ struct LevelsView: View {
 
                 Spacer()
                 
-                Color.clear.frame(width: 60)
+//                Color.clear.frame(width: 0)
             }
             worldList
                 .padding(.top, 60)   // moves it down 60pt within the ZStack

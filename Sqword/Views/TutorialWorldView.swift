@@ -87,7 +87,43 @@ struct TutorialWorldView: View {
 
     var body: some View {
         ZStack {
-            Color.softSandSat.ignoresSafeArea()
+            
+            HStack{
+                HStack{
+                    Button { dismiss() }
+                    label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left").imageScale(.medium)
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(SoftRaisedPillStyle(height: 40))
+                    .opacity(0.5)
+                    .frame(width: 60)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .safeAreaPadding(.top)      // adds the device's top safe area
+                    .padding(.top, 40)          // + your extra nudge
+                    .padding(.leading, 16)
+                    
+                    Spacer()
+
+                    Text("SQWORD")
+                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        .tracking(3)
+                        .foregroundColor(.white)
+                        .opacity(0.5)
+                        .safeAreaPadding(.top)
+                        .padding(.top, 44)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .offset(x: -48, y: 0)
+
+                    Color.clear.frame(width: 60)
+                }
+                .ignoresSafeArea(edges: .top)
+                .navigationBarBackButtonHidden(true)
+                
+            }
 
             switch step {
             case .intro:
@@ -157,6 +193,15 @@ struct TutorialWorldView: View {
                 )
             }
         }
+        .background {
+            Image("Sqword-Splash")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
         .navigationBarBackButtonHidden(true)
 
         // Coin overlay
@@ -217,25 +262,29 @@ struct TutorialWorldView: View {
             }
         }
 
-        // Top toolbar
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left").imageScale(.medium)
-                        Text("Back")
-                    }
-                }
-                .buttonStyle(SoftRaisedPillStyle(height: 36))
-            }
-            ToolbarItem(placement: .principal) {
-                Text("TUTORIAL")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .tracking(1.5)
-            }
-        }
+        
+        
+        
+        
+//        // Top toolbar
+//        .toolbar {
+//            ToolbarItem(placement: .navigationBarLeading) {
+//                Button {
+//                    dismiss()
+//                } label: {
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "chevron.left").imageScale(.medium)
+//                        Text("Back")
+//                    }
+//                }
+//                .buttonStyle(SoftRaisedPillStyle(height: 36))
+//            }
+//            ToolbarItem(placement: .principal) {
+//                Text("TUTORIAL")
+//                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+//                    .tracking(1.5)
+//            }
+//        }
 
         // Footer panels
         .withFooterPanels(
@@ -355,34 +404,37 @@ private struct CalloutCard<Content: View>: View {
 private struct IntroLesson: View {
     var onContinue: () -> Void
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                (Text("Sqword is a square word puzzle."))
+        VStack(spacing: 18) {
+            (Text("Sqword is a square word puzzle."))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.primary)
+            .foregroundColor(.white)
+
+            Text("The first column is equal to the first row. The second column, the second row, etc.")
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
+                .foregroundColor(.white)
 
-                Text("The first column is equal to the first row. The second column, the second row, etc.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
 
-                StaticSquare3x3(rows: ["BIT","ICE","TEN"])
-                    .padding(.top, 4)
+            StaticSquare3x3(rows: ["BIT","ICE","TEN"])
+                .padding(.top, 4)
 
-                Text("Both columns and rows spell the words BIT, ICE & TEN.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 2)
+            Text("Both columns and rows spell the words BIT, ICE & TEN.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+                .padding(.top, 2)
+                .foregroundColor(.white)
 
-                Button(action: onContinue) {
-                    Text("Let's try one")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(SoftRaisedPillStyle(height: 52))
-                .padding(.top, 16)
+            Button(action: onContinue) {
+                Text("Let's try one")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(24)
+            .buttonStyle(SoftRaisedPillStyle(height: 52))
+            .padding(.top, 16)
         }
+        .padding(24)
+        .padding(.top, 40)
     }
 }
 

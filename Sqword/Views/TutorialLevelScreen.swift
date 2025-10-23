@@ -60,6 +60,8 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 	@State private var bagRectInStage: CGRect = .zero
 	@State private var fixedSolution: [String] = []
 	@State private var didFireSecondPlacement = false
+    @Environment(\.dismiss) private var dismiss
+
 
 	// MARK: - L1 one-step-at-a-time instructions
 
@@ -127,10 +129,45 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 	}
 
 	var body: some View {
+        
 		ZStack {
-			// Background
-			Color.softSandSat.ignoresSafeArea()
 
+            HStack{
+                
+                Button { dismiss() }
+                label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left").imageScale(.medium)
+                    }
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(SoftRaisedPillStyle(height: 40))
+                .opacity(0.5)
+                .frame(width: 60)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .safeAreaPadding(.top)      // adds the device's top safe area
+                .padding(.top, 40)          // + your extra nudge
+                .padding(.leading, 16)
+                      
+                Spacer()
+
+                Text("TUTORIAL")
+                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .tracking(3)
+                    .foregroundColor(.white)
+                    .opacity(0.5)
+                    .safeAreaPadding(.top)
+                    .padding(.top, 44)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .offset(x: -45, y: 0)
+
+                Color.clear.frame(width: 60)
+            }
+            .ignoresSafeArea(edges: .top)
+            .navigationBarBackButtonHidden(true)
+
+            
 			VStack(spacing: 0) {
 				// HUD (top-right)
 				HStack {
@@ -140,6 +177,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 						.font(.subheadline)
 						.foregroundStyle(.secondary)
 				}
+                
 				.padding(.horizontal, horizontalPadding)
 				.padding(.top, 14)
 				.fixedSize(horizontal: false, vertical: true)
@@ -307,7 +345,16 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 				.padding(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 0))
 			}
-			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background {
+                Image("Sqword-Splash")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
 
 			// 🟣 Floating ghost that follows the finger while dragging from the bag
 			if let ch = draggingChar {
