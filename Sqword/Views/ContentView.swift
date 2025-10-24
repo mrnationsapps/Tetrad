@@ -1,5 +1,6 @@
 import SwiftUI
 
+
 // Cell size environment for board/bag responsiveness.
 struct CellSizeKey: EnvironmentKey { static let defaultValue: CGFloat = 64 }
 
@@ -17,6 +18,7 @@ private struct StageFrameKey: PreferenceKey {
 
 struct ContentView: View {
     
+    
 #if DEBUG
 @EnvironmentObject private var debug: DebugFlags
 #endif
@@ -25,6 +27,8 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
+    var world: World? = nil
+    
 //    @EnvironmentObject var toast: ToastCenter
 
     var skipDailyBootstrap: Bool = false
@@ -32,6 +36,10 @@ struct ContentView: View {
     var enableDailyWinUI: Bool = true   // ⬅️ new (default stays true for Daily)
     var showHeader: Bool = true   // NEW: allow callers to hide the nav title
 
+    // Resolve which world to use (explicit beats implicit)
+    private var resolvedWorld: World? { world }
+
+    
     // MARK: Boosts
     @EnvironmentObject var boosts: BoostsService
     @State private var showBoostsPanel: Bool = false     // compact panel in the bag area
@@ -60,6 +68,7 @@ struct ContentView: View {
     @State private var ghostTile: LetterTile? = nil
     @State private var ghostStagePoint: CGPoint = .zero   // in "stage" coords
     
+
     // Publish all 16 cell rects (in "stage" space)
     private struct CellRectsKey: PreferenceKey {
         static var defaultValue: [BoardCoord: CGRect] = [:]
@@ -84,11 +93,74 @@ struct ContentView: View {
     }
     
     var body: some View {
+        
+        
         ZStack(alignment: .top) {
 
-            VStack(spacing: 20) {
-                //header
+            HStack{
+                
+                Button { dismiss() }
+                label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left").imageScale(.medium)
+                    }
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(SoftRaisedPillStyle(height: 40))
+                .opacity(0.5)
+                .frame(width: 60)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .safeAreaPadding(.top)      // adds the device's top safe area
+                .padding(.top, 40)          // + your extra nudge
+                .padding(.leading, 16)
+                      
+                Spacer()
 
+                VStack{
+                    if let w = resolvedWorld {
+                        Text("\(w.name) | L\(levels.levelIndex(for: w) + 1)")
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .tracking(3)
+                            .foregroundColor(.white)
+                            .opacity(0.5)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    
+                    Text("Moves: \(game.moveCount)").bold()
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .tracking(3)
+                        .foregroundColor(.white)
+                        .opacity(0.5)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .offset(x: -2, y: 0)
+                    }
+                    .safeAreaPadding(.top)
+                    .padding(.top, 44)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .offset(x: -16, y: 0)
+                    .zIndex(11)
+            }
+            .ignoresSafeArea(edges: .top)
+            .navigationBarBackButtonHidden(true)
+            .zIndex(10)
+            
+            VStack(spacing: 0) {
+
+//                    Text("Moves: \(game.moveCount)").bold()
+//                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+//                    .tracking(3)
+//                    .foregroundColor(.white)
+//                    .opacity(0.5)
+//                    .safeAreaPadding(.top)
+//                    //.padding(.top, 44)
+//                    .frame(maxHeight: .infinity, alignment: .top)
+//                    .frame(maxWidth: .infinity, alignment: .trailing)
+//                    .offset(x: -16, y: 40)
+                    //.zIndex(11)
+
+//                header // only puts moves:XX
+                
                 GeometryReader { g in
                     let boardH = g.size.height * 0.68   // tweak to 0.70 for 70/30
                     let bagH   = g.size.height - boardH
@@ -97,6 +169,7 @@ struct ContentView: View {
                         ZStack { boardView }
                             .frame(height: boardH)
                             .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 30)
 
                         underBoardRegion(targetHeight: bagH)
                             .frame(height: bagH)
@@ -162,6 +235,7 @@ struct ContentView: View {
             }
             
         }
+
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
         .overlay(alignment: .topLeading) {
             if isDraggingGhost, let t = ghostTile {
@@ -487,9 +561,11 @@ struct ContentView: View {
 
         return VStack(alignment: .center, spacing: 8) {
             Text("Letter Bag")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .tracking(3)
+                .foregroundColor(.white)
+                .opacity(0.8)
+            
             GeometryReader { geo in
                 let W        = max(1, geo.size.width)
                 let gap      = bagGap
@@ -557,6 +633,7 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 1)
         }
         .contentShape(Rectangle())
+        .offset(x:0, y:-30)
     }
 
 
@@ -640,8 +717,10 @@ struct ContentView: View {
                     .softRaised(corner: 12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.22), lineWidth: 1)
+                            .stroke(Color.black.opacity(0.70), lineWidth: 1)
                     )
+                    .opacity(0.5)
+                
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .inset(by: 0.5)

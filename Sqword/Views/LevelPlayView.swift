@@ -40,7 +40,7 @@ struct LevelPlayView: View {
     // MARK: - Main Body
     var body: some View {
         ZStack {
-            Color.softSandSat.ignoresSafeArea()   // ← back layer
+            //Color.softSandSat.ignoresSafeArea()   // ← back layer
 
             boardLayer
                 .modifier(FreezeAnimations(active: showWorldBanner)) // <- board never shifts
@@ -52,7 +52,7 @@ struct LevelPlayView: View {
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
         .navigationBarBackButtonHidden(true)
-        .toolbar { levelToolbar }
+        //.toolbar { levelToolbar }
 
         .onAppear {
             guard !didStart else { return }
@@ -191,6 +191,7 @@ struct LevelPlayView: View {
 
     @ViewBuilder private var boardLayer: some View {
         ContentView(
+            world: world,
             skipDailyBootstrap: true,
             enableDailyWinUI: false,
             showHeader: false
