@@ -85,9 +85,9 @@ struct ContentView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color.softSandSat.ignoresSafeArea()
+
             VStack(spacing: 20) {
-                header
+                //header
 
                 GeometryReader { g in
                     let boardH = g.size.height * 0.68   // tweak to 0.70 for 70/30
@@ -110,6 +110,15 @@ struct ContentView: View {
                             }())
                     }
                 }
+            }
+            .background {
+                Image("Sqword-Splash")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .coordinateSpace(name: "stage")
@@ -163,30 +172,31 @@ struct ContentView: View {
                     .clipped(antialiased: false)
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    //handleBack()
-                    dismiss()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left").imageScale(.medium)
-                        Text("Back")
-                    }
-                }
-                .buttonStyle(SoftRaisedPillStyle(height: 36))
-            }
-            
-            if showHeader && enableDailyWinUI {
-                ToolbarItem(placement: .principal) {
-                    Text("Sqword")
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .tracking(1.5)
-                        .foregroundStyle(Color.black)
-                }
-            }
-        }
-        .navigationBarBackButtonHidden(true)
+        
+        
+//        .toolbar {
+//            ToolbarItem(placement: .navigationBarLeading) {
+//                Button {
+//                    dismiss()
+//                } label: {
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "chevron.left").imageScale(.medium)
+//                        Text("Back")
+//                    }
+//                }
+//                .buttonStyle(SoftRaisedPillStyle(height: 36))
+//            }
+//            
+//            if showHeader && enableDailyWinUI {
+//                ToolbarItem(placement: .principal) {
+//                    Text("Sqword")
+//                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+//                        .tracking(1.5)
+//                        .foregroundStyle(Color.black)
+//                }
+//            }
+//        }
+//        .navigationBarBackButtonHidden(true)
 
         // Daily bootstrap stays gated by skipDailyBootstrap
         .onAppear {
@@ -501,7 +511,6 @@ struct ContentView: View {
                     count: fit.cols
                 )
 
-                // No ScrollView → tiles must fit in targetHeight by construction
                 LazyVGrid(columns: columns, spacing: gap) {
                     ForEach(bagTiles) { tile in
                         GeometryReader { cellGeo in

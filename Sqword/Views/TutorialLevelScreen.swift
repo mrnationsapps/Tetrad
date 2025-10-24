@@ -131,42 +131,6 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 	var body: some View {
         
 		ZStack {
-
-            HStack{
-                
-                Button { dismiss() }
-                label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.left").imageScale(.medium)
-                    }
-                    .foregroundStyle(.primary)
-                }
-                .buttonStyle(SoftRaisedPillStyle(height: 40))
-                .opacity(0.5)
-                .frame(width: 60)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .safeAreaPadding(.top)      // adds the device's top safe area
-                .padding(.top, 40)          // + your extra nudge
-                .padding(.leading, 16)
-                      
-                Spacer()
-
-                Text("TUTORIAL")
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .tracking(3)
-                    .foregroundColor(.white)
-                    .opacity(0.5)
-                    .safeAreaPadding(.top)
-                    .padding(.top, 44)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(x: -45, y: 0)
-
-                Color.clear.frame(width: 60)
-            }
-            .ignoresSafeArea(edges: .top)
-            .navigationBarBackButtonHidden(true)
-
             
 			VStack(spacing: 0) {
 				// HUD (top-right)
@@ -174,12 +138,12 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 					Spacer()
 					//Text("Moves: \(model.moves)    Streak: \(streak)")
 					Text("Moves: \(model.moves)")
-						.font(.subheadline)
-						.foregroundStyle(.secondary)
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
 				}
                 
 				.padding(.horizontal, horizontalPadding)
-				.padding(.top, 14)
+				.padding(.top, 34)
 				.fixedSize(horizontal: false, vertical: true)
 
 				// BOARD ZONE: cap to a 3×3 footprint, keep tile size = real 4×4
@@ -267,9 +231,9 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 
 				// LETTER BAG
 				VStack(alignment: .leading, spacing: 8) {
-					Text("Letter Bag")
-						.font(.caption)
-						.foregroundStyle(.secondary)
+                    Text("Letter Bag")
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
 
 					// --- Wrapping grid (replaces HStack) ---
 					let tileSide: CGFloat = 42
@@ -353,7 +317,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .ignoresSafeArea()
-                    .allowsHitTesting(false)
+                    .allowsHitTesting(true)
             }
 
 			// 🟣 Floating ghost that follows the finger while dragging from the bag
@@ -371,6 +335,42 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 					.allowsHitTesting(false)
 					.transition(.opacity)
 			}
+            
+            HStack{
+
+                Button { dismiss() }
+                label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left").imageScale(.medium)
+                    }
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(SoftRaisedPillStyle(height: 40))
+                .opacity(0.5)
+                .frame(width: 60)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .safeAreaPadding(.top)      // adds the device's top safe area
+                .padding(.top, 40)          // + your extra nudge
+                .padding(.leading, 16)
+                      
+                Spacer()
+
+                Text("TUTORIAL")
+                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .tracking(3)
+                    .foregroundColor(.white)
+                    .opacity(0.5)
+                    .safeAreaPadding(.top)
+                    .padding(.top, 44)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .offset(x: -45, y: 0)
+
+                Color.clear.frame(width: 60)
+            }
+            .ignoresSafeArea(edges: .top)
+            .navigationBarBackButtonHidden(true)
+            
 		}
 		// shared coordinate space so bag drag points and board measurement agree
 		.coordinateSpace(name: "stage")

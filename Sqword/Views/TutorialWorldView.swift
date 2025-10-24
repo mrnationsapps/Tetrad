@@ -7,7 +7,7 @@ private struct BouncyArrowDownSimple: View {
     var xOffset: CGFloat = 84        // + moves right from horizontal center, – moves left
     var yOffset: CGFloat = 0        // baseline vertical offset (negative lifts it up)
     var bounce: CGFloat = 10        // bounce distance
-    var color: Color = .blue       // arrow color
+    var color: Color = .yellow       // arrow color
 
     @State private var phase: CGFloat = 0
 
@@ -379,6 +379,7 @@ private func numberedStep(_ n: Int, _ text: String) -> some View {
             .frame(maxWidth: .infinity)
             .padding(10)
             .multilineTextAlignment(.center)
+            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
     }
 }
 
@@ -386,15 +387,15 @@ private struct CalloutCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.softSage.opacity(1.0))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(.white, lineWidth: 1)
-            )
+//            .padding(.vertical, 10)
+//            .background(
+//                RoundedRectangle(cornerRadius: 12)
+//                    .fill(Color.softSage.opacity(1.0))
+//            )
+//            .overlay(
+//                RoundedRectangle(cornerRadius: 12)
+//                    .stroke(.white, lineWidth: 1)
+//            )
             .shadow(radius: 6, x: 0, y: 2)
             .padding(.horizontal, 20)
             .offset(y: 20)
