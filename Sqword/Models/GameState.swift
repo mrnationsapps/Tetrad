@@ -419,7 +419,7 @@ final class GameState: ObservableObject {
         }
 
         solved = true
-        
+
         // Persist one-time “skill” achievements (mode-agnostic)
         let d = UserDefaults.standard
         if moveCount <= 10 {
@@ -429,21 +429,27 @@ final class GameState: ObservableObject {
             d.set(true, forKey: "ach.unlocked.perfect_fill")
         }
 
-        // Daily-only: bump the daily counter immediately (idempotent), then streak + persist
-        if !isLevelMode {
-            // Prefer the puzzle identity’s day key; fallback to today UTC if needed
-            let todayKey: String = (identity?.dayUTC) ?? {
-                let fmt = ISO8601DateFormatter()
-                fmt.timeZone = .init(secondsFromGMT: 0)
-                fmt.formatOptions = [.withFullDate]
-                return fmt.string(from: Date())
-            }()
-
-            recordFirstTimeDailySolveIfNeeded(todayKey: todayKey)  // ← unlocks `first_daily`
-            advanceStreakIfNeeded()
-            registerSolvedAndPersist()
+        // ✅ Worlds/Levels path: count toward "five_levels" etc.
+        if isLevelMode {
+            totalLevelsSolved += 1
+            saveAchievementTotals()   // persist the updated totals
+            return
         }
+
+        // Daily-only: bump the daily counter immediately (idempotent), then streak + persist
+        // (unchanged)
+        let todayKey: String = (identity?.dayUTC) ?? {
+            let fmt = ISO8601DateFormatter()
+            fmt.timeZone = .init(secondsFromGMT: 0)
+            fmt.formatOptions = [.withFullDate]
+            return fmt.string(from: Date())
+        }()
+
+        recordFirstTimeDailySolveIfNeeded(todayKey: todayKey)  // ← unlocks `first_daily`
+        advanceStreakIfNeeded()
+        registerSolvedAndPersist()
     }
+
 
 
     
