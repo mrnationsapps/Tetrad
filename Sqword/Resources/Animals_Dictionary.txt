@@ -32,7 +32,6 @@ gull
 hare
 hawk
 herd
-hind
 ibex
 ibis
 joey
@@ -44,6 +43,7 @@ lynx
 mako
 moth
 mule
+mole
 newt
 orca
 oxen
@@ -63,6 +63,8 @@ toad
 toro
 tuna
 wren
+wolf
+worm
 yaks
 ants
 bass
@@ -84,7 +86,6 @@ colt
 coot
 croc
 elan
-emyd
 erne
 gars
 kids
@@ -103,6 +104,5 @@ seal
 skat
 sole
 tern
-titi
 wasp
-birds
+bird

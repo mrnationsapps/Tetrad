@@ -1096,19 +1096,39 @@ struct ContentView: View {
     // MARK: - Drag/drop helpers
 
     private func handleDrop(of tile: LetterTile, at stagePoint: CGPoint) {
+        // Helper: place + optionally count a move when replacing
+        func place(_ tile: LetterTile, at coord: BoardCoord) {
+            let cameFromBag: Bool = {
+                if case .board = tile.location { return false }
+                return true // .bag or anything else
+            }()
+
+            // Check if there's already a tile at this coord
+            let isOccupied: Bool = hasTileOnBoard(at: coord)
+
+            // Place the tile
+            game.placeTile(tile, at: coord)
+
+            // Count a move ONLY if it came from the bag AND replaced an existing board tile
+            if cameFromBag && isOccupied {
+                // Prefer your central counter if you have it:
+                // game.notePlayerMove()
+                game.moveCount += 1
+            }
+        }
+
         // 1) Exact hit on a cell? Place there.
         if let coord = coordFromStageByRects(stagePoint) {
-            game.placeTile(tile, at: coord)
+            place(tile, at: coord)
             return
         }
 
-        // 2) No exact hit: if the touch is inside (or very near) the board rect,
-        //    snap to the nearest cell center so small vertical offsets or gap hits still place.
+        // 2) No exact hit: if inside (or very near) the board rect, snap to nearest cell center
         let snapInset: CGFloat = -8  // allow a small “near the edge” tolerance
         let snapRect = boardRect.insetBy(dx: snapInset, dy: snapInset)
 
         if snapRect.contains(stagePoint), let coord = nearestCoordByCenter(stagePoint) {
-            game.placeTile(tile, at: coord)
+            place(tile, at: coord)
             return
         }
 
@@ -1117,6 +1137,25 @@ struct ContentView: View {
             game.removeTile(from: prev)
         }
         // If it originated in the bag and wasn’t dropped over the board, do nothing.
+    }
+
+    /// Returns true if a board cell already contains a tile at `coord`.
+    private func hasTileOnBoard(at coord: BoardCoord) -> Bool {
+        // Prefer an existing API if you have it, e.g.:
+        // return game.tile(at: coord) != nil
+        // or:
+        // return game.board.tile(at: coord) != nil
+
+        // Fallback example using your rect map + GameState tiles array:
+        // (Adjust if your model names differ.)
+        if let existing = game.tiles.first(where: {
+            if case .board(let c) = $0.location { return c == coord }
+            return false
+        }) {
+            _ = existing // just to quiet warnings if you don’t use it further
+            return true
+        }
+        return false
     }
 
 

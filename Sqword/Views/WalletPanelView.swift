@@ -16,6 +16,9 @@ struct WalletPanelView: View {
 
     @State private var showToast = false
     @State private var toastText = ""
+    
+    public var walletPulse: Bool = false
+
 
     // Back-compat with call sites like: WalletPanelView(dismiss: dismiss)
     var dismiss: (() -> Void)? = nil
@@ -73,6 +76,21 @@ struct WalletPanelView: View {
     // MARK: - Buy Boosts (Reveal)
     private var buyBoostsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            
+            let hasUnclaimed = !Achievement.unclaimed(using: game).isEmpty
+
+            if hasUnclaimed {
+                Button {
+                    let total = Achievement.claimAll(using: game, levels: levels)
+                    // (optional) haptic/toast here
+                } label: {
+                    Text("Claim your Rewards")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 180, height: 40)
+                }
+                .buttonStyle(SoftRaisedPillStyle(height: 40))
+            }
+            
             Text("Buy Boosts")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

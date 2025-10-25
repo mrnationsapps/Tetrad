@@ -396,7 +396,7 @@ struct LevelPlayView: View {
         } else if name.contains("nature") {
             colors = [Color(hue: 0.33, saturation: 0.75, brightness: 0.95),
                       Color(hue: 0.38, saturation: 0.80, brightness: 0.90)]
-        } else if name.contains("retro") {
+        } else if name.contains("tech") {
             colors = [Color(hue: 0.85, saturation: 0.75, brightness: 1.0),
                       Color(hue: 0.52, saturation: 0.80, brightness: 0.95)]
         } else if name.contains("travel") {
@@ -415,7 +415,7 @@ struct LevelPlayView: View {
         let n = world.name.lowercased()
         if n.contains("food")    { return .orange }
         if n.contains("nature")  { return .green }
-        if n.contains("retro")   { return .pink }
+        if n.contains("tech")   { return .pink }
         if n.contains("travel")  { return .cyan }
         if n.contains("animals") { return .yellow }
         return .white
@@ -440,8 +440,8 @@ private struct WorldWordBanner: View {
         VStack(spacing: 8) {
             Text("World Word Found!")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .foregroundStyle(.black)
-                .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.90), radius: 4, x: 0, y: 1)
                 .accessibilityHidden(true)
 
             label

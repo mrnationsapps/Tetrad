@@ -54,11 +54,11 @@ enum WorldsCatalog {
               dictionaryID: "Holiday_Dictionary",
               isTutorial: false),
 
-        World(id: "retro",
-              name: "Retro",
-              artName: "Retro",
+        World(id: "tech",
+              name: "Technology",
+              artName: "Technology",
               unlockCost: 30,
-              dictionaryID: "Adjectives_Dictionary",
+              dictionaryID: "Technology_Dictionary",
               isTutorial: false),
 
         World(id: "travel",
