@@ -4,10 +4,14 @@ struct IntroView: View {
     // Env
     @EnvironmentObject var game: GameState
     @EnvironmentObject var levels: LevelsService
+    @EnvironmentObject private var music: MusicCenter
+
 
     // Nav
     @State private var navigateToGame = false
     @State private var navigateToLevels = false
+    
+    @State private var showSettings = false
 
     // Data
     @State private var achievements: [Achievement] = Achievement.all
@@ -61,6 +65,9 @@ struct IntroView: View {
                     nav.setBackgroundImage(UIImage(), for: .default)
                     nav.shadowImage = UIImage()
                 }
+                
+                .onAppear { music.enterMenu() }
+
             }
             .background {
                 Image("Sqword-Splash")
@@ -92,6 +99,7 @@ struct IntroView: View {
             
             achievements = Achievement.all
         }
+        .settingsOverlay(isPresented: $showSettings)
 
     }
 
@@ -102,14 +110,38 @@ struct IntroView: View {
 private extension IntroView {
     var header: some View {
         VStack(spacing: 8) {
-            Text("Sqword")
-                .font(.system(size: 44, weight: .heavy, design: .rounded))
-                .tracking(3)
+            ZStack {
+                Text("SQWORD")
+                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .tracking(3)
+                    .foregroundColor(.white)
+                    .opacity(0.5)
+                    .offset(y: -20)
+
+                HStack {
+                    Spacer()
+                    Button {
+                        withAnimation(.spring()) { showSettings = true }
+                    } label: {
+                        Image(systemName: "gearshape").imageScale(.medium)
+                    }
+                    .accessibilityLabel("Open Settings")
+                    .buttonStyle(SoftRaisedPillStyle(height: 40))
+                    .opacity(0.5)
+                    .frame(width: 60)
+                    .padding(.trailing, 10)
+                    .offset(y: -20)
+                }
+
+            }
+            .safeAreaPadding(.top)
+            .padding(.top, 0)
+
 
             Text("Make 4 four-letter words, daily.")
                 .font(.headline)
         }
-        .foregroundStyle(Color.black)
+        .foregroundStyle(Color.white)
         .padding(.top, 0)
 
     }
@@ -123,7 +155,7 @@ private extension IntroView {
                 Text("\(unlockedCount())/\(achievements.count)")
                     .font(.subheadline)
             }
-            .foregroundStyle(Color.black)
+            .foregroundStyle(Color.white)
 
             ScrollView {
                 LazyVStack(spacing: 12) {

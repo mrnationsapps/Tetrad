@@ -6,7 +6,8 @@ struct LevelPlayView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
-    // @EnvironmentObject var toast: ToastCenter   // ← not used anymore
+    @EnvironmentObject private var music: MusicCenter
+
 
     let world: World
 
@@ -40,7 +41,6 @@ struct LevelPlayView: View {
     // MARK: - Main Body
     var body: some View {
         ZStack {
-            //Color.softSandSat.ignoresSafeArea()   // ← back layer
 
             boardLayer
                 .modifier(FreezeAnimations(active: showWorldBanner)) // <- board never shifts
@@ -60,6 +60,9 @@ struct LevelPlayView: View {
             startNewSession()
         }
 
+        .onAppear { music.enterGame() }   // MusicCenter will pause for game
+
+        
         // World word completed → show banner
         .onChange(of: game.worldWordJustCompleted) { _, justCompleted in
             guard justCompleted else { return }

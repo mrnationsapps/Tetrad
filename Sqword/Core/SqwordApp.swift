@@ -8,6 +8,7 @@ struct SqwordApp: App {
     @StateObject private var boosts = BoostsService()
     @StateObject private var levels = LevelsService()
     @StateObject private var store = IAPManager()
+    @StateObject private var music = MusicCenter()
 
 
     @Environment(\.scenePhase) private var scenePhase
@@ -24,6 +25,7 @@ struct SqwordApp: App {
                 .environmentObject(boosts)
                 .environmentObject(levels)
                 .environmentObject(store)
+                .environmentObject(music)
                 .task {
                     await store.loadProducts()
                 }
@@ -34,6 +36,11 @@ struct SqwordApp: App {
                             Task { @MainActor in levels.addCoins(sku.coinAmount) }
                         }
                     }
+                }
+            
+                .onChange(of: scenePhase) { phase in
+                    if phase != .active { AudioManager.shared.pauseBGM() }
+                    else { music.zone == .menu ? music.enterMenu() : music.enterGame() }
                 }
 
                 // Debug-only flags

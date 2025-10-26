@@ -27,6 +27,8 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var levels: LevelsService
+    @EnvironmentObject private var music: MusicCenter
+
     var world: World? = nil
     
 //    @EnvironmentObject var toast: ToastCenter
@@ -301,6 +303,8 @@ struct ContentView: View {
 
         .onAppear { showWinPopup = false }  // ensure clean state on re-entry.
         
+        .onAppear { music.enterGame() }   // MusicCenter will pause for game
+
         .withFooterPanels(
             coins: levels.coins,
             boostsAvailable: boosts.remaining,
@@ -1157,8 +1161,6 @@ struct ContentView: View {
         }
         return false
     }
-
-
 
     private func coordFromStage(_ stagePoint: CGPoint) -> BoardCoord? {
         // Convert from the shared "stage" space to the board’s local space

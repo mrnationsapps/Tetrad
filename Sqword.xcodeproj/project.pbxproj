@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		7C741A802EA5A015002AE5F3 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C741A7F2EA5A015002AE5F3 /* StoreKit.framework */; };
+		7C741A952EAD7474002AE5F3 /* sqword-music.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7C741A942EAD7474002AE5F3 /* sqword-music.mp3 */; };
 		7CF4BF532E9C6A9900540F3A /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 7CF4BF522E9C6A9900540F3A /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		7C741A7F2EA5A015002AE5F3 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		7C741A942EAD7474002AE5F3 /* sqword-music.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; name = "sqword-music.mp3"; path = "Sqword/Resources/Assets.xcassets/sqword-music.dataset/sqword-music.mp3"; sourceTree = "<group>"; };
 		7CA7C81A2E84F4340059B5A8 /* Sqword.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sqword.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -48,6 +50,7 @@
 		7CA7C8112E84F4340059B5A8 = {
 			isa = PBXGroup;
 			children = (
+				7C741A942EAD7474002AE5F3 /* sqword-music.mp3 */,
 				7CA7C81C2E84F4340059B5A8 /* Sqword */,
 				7C741A7E2EA5A015002AE5F3 /* Frameworks */,
 				7CA7C81B2E84F4340059B5A8 /* Products */,
@@ -131,6 +134,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7C741A952EAD7474002AE5F3 /* sqword-music.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

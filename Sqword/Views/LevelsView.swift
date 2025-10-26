@@ -5,44 +5,7 @@ private enum WorldRoute: Hashable {
     case level(World.ID)
 }
 
-//struct LevelsViewScreen: View {
-//    var body: some View {
-//        ZStack {
-//            
-//            
-//        }
-//    }
-//}
-//
-//struct LevelsViewScreen: View {
-//    var body: some View {
-//        ZStack {
-//            BackgroundCanvas()                       // single, shared background
-//                .ignoresSafeArea()
-//                .allowsHitTesting(false)
-//            
-//            NavigationStack {
-//                LevelsView()                         // main content
-//                    .toolbarBackground(.visible, for: .navigationBar)
-//                    .toolbarBackground(.clear,   for: .navigationBar)
-//                //.toolbarBackground(.clear,   for: .navigationBar, .scrollEdge)
-//            }
-//        }
-//    }
-//}
-//    
-//    private struct BackgroundCanvas: View {
-//        var body: some View {
-//            GeometryReader { geo in
-//                Image("Sqword-Splash")
-//                    .resizable()
-//                    .scaledToFill()
-//                    .frame(width: geo.size.width, height: geo.size.height)
-//                    .clipped()
-//                    .accessibilityHidden(true)
-//            }
-//        }
-//    }
+
 
 struct LevelsView: View {
     
@@ -50,6 +13,8 @@ struct LevelsView: View {
     @EnvironmentObject var game: GameState
     @EnvironmentObject var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
+    @EnvironmentObject private var music: MusicCenter
+
 
     // Navigation
     @State private var navigateToLevel = false
@@ -156,6 +121,8 @@ struct LevelsView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { coinPulse = false }
         }
 
+        .onAppear { music.enterMenu() }
+        
         .withFooterPanels(
             coins: levels.coins,
             boostsAvailable: boosts.remaining,

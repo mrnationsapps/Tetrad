@@ -15,7 +15,8 @@ struct World: Identifiable, Codable, Equatable {
     let unlockCost: Int            // coins required to unlock (0 for tutorial)
     let dictionaryID: String       // which word list to use
     let isTutorial: Bool           // true only for tutorial
-}
+    
+    }
 
 enum WorldsCatalog {
     static let all: [World] = [
