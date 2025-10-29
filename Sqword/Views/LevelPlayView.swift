@@ -8,7 +8,6 @@ struct LevelPlayView: View {
     @EnvironmentObject var boosts: BoostsService
     @EnvironmentObject private var music: MusicCenter
 
-
     let world: World
 
     @State private var didStart = false
@@ -40,6 +39,7 @@ struct LevelPlayView: View {
 
     // MARK: - Main Body
     var body: some View {
+        
         ZStack {
 
             boardLayer
@@ -52,7 +52,6 @@ struct LevelPlayView: View {
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showWorldBanner)
         .navigationBarBackButtonHidden(true)
-        //.toolbar { levelToolbar }
 
         .onAppear {
             guard !didStart else { return }
@@ -61,6 +60,7 @@ struct LevelPlayView: View {
         }
 
         .onAppear { music.enterGame() }   // MusicCenter will pause for game
+        .onDisappear { music.enterMenu() } // resumes when leaving gameplay
 
         
         // World word completed → show banner

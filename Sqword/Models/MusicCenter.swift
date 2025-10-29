@@ -4,6 +4,7 @@
 //
 //  Created by kevin nations on 10/25/25.
 //
+
 import SwiftUI
 
 final class MusicCenter: ObservableObject {
@@ -18,23 +19,55 @@ final class MusicCenter: ObservableObject {
     }
 
     // Where the app currently is (menu or game)
-    @Published var zone: Zone = .none { didSet { apply() } }
+    @Published var zone: Zone = .none {
+        didSet { apply() }
+    }
 
-    func enterMenu() { zone = .menu }
-    func enterGame() { zone = .game }
+    // MARK: - Debug tracking
+    private(set) var lastCaller: String = "unknown"
 
+    /// Explicitly re-apply current state to the audio layer (handy on scenePhase changes).
+    func refresh(_ src: String = #fileID) {
+        lastCaller = src
+        log("refresh")
+        apply()
+    }
+
+    // MARK: - Zone APIs (with caller logging)
+    func enterMenu(_ src: String = #fileID) {
+        lastCaller = src
+        log("enterMenu")
+        zone = .menu
+    }
+
+    func enterGame(_ src: String = #fileID) {
+        lastCaller = src
+        log("enterGame")
+        zone = .game
+    }
+
+    // MARK: - Router
     /// Decide and apply playback
     private func apply() {
         switch (enabled, zone) {
         case (true, .menu):
-            // resume or start if not loaded yet
-            AudioManager.shared.resumeBGM()
-            if !AudioManager.shared.isPlaying {
-                AudioManager.shared.playBGM(named: "sqword-music")
+            AudioManager.shared.allowResume = true
+            if !AudioManager.shared.isLoaded {
+                AudioManager.shared.playBGM(named: "sqword-music", volume: 0.45)
             }
+            AudioManager.shared.fadeInAndPlay(duration: 0.45)
+
         default:
-            AudioManager.shared.pauseBGM()
+            AudioManager.shared.allowResume = false
+            AudioManager.shared.fadeOutAndPause(duration: 0.35)
         }
     }
-}
 
+
+    // MARK: - Logging helper
+    private func log(_ msg: String) {
+        #if DEBUG
+        print("[Music] \(msg)  (lastCaller: \(lastCaller))")
+        #endif
+    }
+}

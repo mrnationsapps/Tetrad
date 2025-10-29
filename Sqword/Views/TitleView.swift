@@ -3,6 +3,8 @@ import SwiftUI
 struct TitleView: View {
     var onFinish: () -> Void
     @State private var appear = false
+    @EnvironmentObject private var music: MusicCenter
+
 
     var body: some View {
         ZStack {
@@ -12,11 +14,6 @@ struct TitleView: View {
                 .scaledToFill()
         }
         .ignoresSafeArea()
-//        .onAppear {
-//            // Start the music when the title appears
-//            AudioManager.shared.playBGM(named: "sqword-music")
-//            withAnimation(.easeOut(duration: 0.6)) { appear = true }
-//        }
         .overlay {
             Image("Sqword-title")
                 .resizable()
@@ -36,5 +33,8 @@ struct TitleView: View {
             .frame(width: 200)
             .frame(maxWidth: .infinity, alignment: .center)
         }
+        
+        .onAppear { music.enterMenu() }
+
     }
 }

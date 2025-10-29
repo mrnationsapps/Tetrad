@@ -148,20 +148,6 @@ struct ContentView: View {
             .zIndex(10)
             
             VStack(spacing: 0) {
-
-//                    Text("Moves: \(game.moveCount)").bold()
-//                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-//                    .tracking(3)
-//                    .foregroundColor(.white)
-//                    .opacity(0.5)
-//                    .safeAreaPadding(.top)
-//                    //.padding(.top, 44)
-//                    .frame(maxHeight: .infinity, alignment: .top)
-//                    .frame(maxWidth: .infinity, alignment: .trailing)
-//                    .offset(x: -16, y: 40)
-                    //.zIndex(11)
-
-//                header // only puts moves:XX
                 
                 GeometryReader { g in
                     let boardH = g.size.height * 0.68   // tweak to 0.70 for 70/30
@@ -249,30 +235,6 @@ struct ContentView: View {
             }
         }
         
-        
-//        .toolbar {
-//            ToolbarItem(placement: .navigationBarLeading) {
-//                Button {
-//                    dismiss()
-//                } label: {
-//                    HStack(spacing: 6) {
-//                        Image(systemName: "chevron.left").imageScale(.medium)
-//                        Text("Back")
-//                    }
-//                }
-//                .buttonStyle(SoftRaisedPillStyle(height: 36))
-//            }
-//            
-//            if showHeader && enableDailyWinUI {
-//                ToolbarItem(placement: .principal) {
-//                    Text("Sqword")
-//                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-//                        .tracking(1.5)
-//                        .foregroundStyle(Color.black)
-//                }
-//            }
-//        }
-//        .navigationBarBackButtonHidden(true)
 
         // Daily bootstrap stays gated by skipDailyBootstrap
         .onAppear {
@@ -304,6 +266,8 @@ struct ContentView: View {
         .onAppear { showWinPopup = false }  // ensure clean state on re-entry.
         
         .onAppear { music.enterGame() }   // MusicCenter will pause for game
+
+        .onDisappear { music.enterMenu() }   // resume when leaving gameplay
 
         .withFooterPanels(
             coins: levels.coins,

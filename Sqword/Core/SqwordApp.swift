@@ -39,8 +39,9 @@ struct SqwordApp: App {
                 }
             
                 .onChange(of: scenePhase) { phase in
-                    if phase != .active { AudioManager.shared.pauseBGM() }
-                    else { music.zone == .menu ? music.enterMenu() : music.enterGame() }
+                    if phase != .active {
+                        AudioManager.shared.pauseBGM()
+                    }
                 }
 
                 // Debug-only flags

@@ -14,6 +14,7 @@ chum
 clan
 cops
 crew
+cook
 dads
 dame
 dean
@@ -30,10 +31,12 @@ fool
 gals
 gang
 girl
+geek
 guys
 heir
 hero
 hers
+hobo
 jury
 kids
 king
@@ -46,6 +49,7 @@ male
 miss
 nana
 nuns
+nerd
 pals
 papa
 peep

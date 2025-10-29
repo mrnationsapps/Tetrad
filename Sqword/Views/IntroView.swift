@@ -66,7 +66,7 @@ struct IntroView: View {
                     nav.shadowImage = UIImage()
                 }
                 
-                .onAppear { music.enterMenu() }
+//                .onAppear { music.enterMenu() }
 
             }
             .background {

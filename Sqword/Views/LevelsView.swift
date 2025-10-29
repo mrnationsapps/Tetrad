@@ -14,6 +14,9 @@ struct LevelsView: View {
     @EnvironmentObject var levels: LevelsService
     @EnvironmentObject var boosts: BoostsService
     @EnvironmentObject private var music: MusicCenter
+    @State private var showFoodIntro = false
+    @State private var pendingWorldForIntro: World?
+    private let foodIntroSeenKey = "intro.food.seen"
 
 
     // Navigation
@@ -101,27 +104,29 @@ struct LevelsView: View {
             Button("Unlock & Play") {
                 guard let world = pendingUnlockWorld else { return }
                 _ = levels.unlockSelectedIfPossible()
-                levelWorld = world
-                navigateToLevel = true
+                go(to: world)              // ← same gate logic here
                 pendingUnlockWorld = nil
             }
         } message: {
             let cost = pendingUnlockWorld?.unlockCost ?? 0
             Text("Spend \(cost) coins to unlock and start playing.")
         }
+
         .navigationDestination(isPresented: $navigateToLevel) {
             if let world = levelWorld {
                 LevelPlayView(world: world)
                     .environmentObject(game)
             }
         }
+        
+        
         // start collapsed (no jump)
         .onChange(of: levels.coins) { _, _ in
             coinPulse = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { coinPulse = false }
         }
 
-        .onAppear { music.enterMenu() }
+//        .onAppear { music.enterMenu() }
         
         .withFooterPanels(
             coins: levels.coins,
@@ -132,6 +137,24 @@ struct LevelsView: View {
             walletPanel: { dismiss in WalletPanelView(dismiss: dismiss) }   // 👈 shared
         )
         
+        .fullScreenCover(isPresented: $showFoodIntro) {
+            WorldInstructionGate(
+                animationName: "World_Instruction",
+                pauseStops: [0.01, 0.03, 0.04, 0.05],
+                onFinish: {
+                    UserDefaults.standard.set(true, forKey: foodIntroSeenKey)
+                    let w = pendingWorldForIntro
+                    pendingWorldForIntro = nil
+                    showFoodIntro = false
+                    DispatchQueue.main.async {
+                        if let w { levelWorld = w; navigateToLevel = true }
+                    }
+                }
+            )
+            .ignoresSafeArea()
+        }
+
+
         
     }
     
@@ -147,6 +170,10 @@ struct LevelsView: View {
                 .font(.headline)
                 .foregroundColor(.white)
                 .padding(.horizontal, 20)
+                .onTapGesture(count: 3) {
+                    UserDefaults.standard.set(false, forKey: "intro.food.seen")
+                    print("👀 Reset intro.food.seen → false")
+                }
 
             GeometryReader { geo in
                 let isPad = UIDevice.current.userInterfaceIdiom == .pad
@@ -168,9 +195,10 @@ struct LevelsView: View {
                     ) {
                         ForEach(levels.worlds) { world in
                             if levels.isUnlocked(world) {
-                                NavigationLink {
-                                    destinationView(for: world)
-                                        .onAppear { levels.select(world) }
+                                // UNLOCKED → centralize navigation through go(to:)
+                                Button {
+                                    levels.select(world)
+                                    go(to: world)    // shows Food gate first time, else navigates
                                 } label: {
                                     WorldCard(
                                         world: world,
@@ -181,7 +209,9 @@ struct LevelsView: View {
                                     .frame(width: cardW, height: cardH)
                                 }
                                 .buttonStyle(.plain)
+
                             } else {
+                                // LOCKED → unchanged
                                 Button {
                                     levels.select(world)
                                     if levels.coins >= world.unlockCost {
@@ -202,6 +232,8 @@ struct LevelsView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+
+
                     }
                     .padding(.horizontal, horizPad)
                     .padding(.vertical, innerVPad) // ← this is now accounted for
@@ -214,6 +246,16 @@ struct LevelsView: View {
     }
     
 
+    private func go(to world: World) {
+        // Food is always first — gate it once, then proceed normally forever.
+        if world.id == "food", !UserDefaults.standard.bool(forKey: foodIntroSeenKey) {
+            pendingWorldForIntro = world
+            showFoodIntro = true
+        } else {
+            levelWorld = world
+            navigateToLevel = true
+        }
+    }
 
     
     // MARK: Actions
@@ -257,100 +299,7 @@ struct LevelsView: View {
     
 }
     
-
-//struct LevelsView: View {
-//    @Environment(\.dismiss) private var dismiss
-//    @EnvironmentObject var game: GameState
-//    @EnvironmentObject var levels: LevelsService
-//    @EnvironmentObject var boosts: BoostsService
-//
-//    // Navigation
-//    @State private var navigateToLevel = false
-//    @State private var levelWorld: World?
-//
-//    // Alerts
-//    @State private var showInsufficientCoins = false
-//    @State private var showConfirmUnlock = false
-//    @State private var pendingUnlockWorld: World?
-//
-//    // Wallet sheet state
-//    @State private var walletExpanded: Bool = false      // on/off
-//    @State private var walletExpansion: CGFloat = 0      // 0…1 progress (for backdrop opacity)
-//    @GestureState private var walletDrag: CGFloat = 0    // live drag delta (+down, −up)
-//    @State private var coinPulse: Bool = false
-//
-//    var body: some View {
-//        let backdropVisible = walletExpansion > 0.01
-//
-//        // MAIN LAYOUT
-//        let main = ZStack {
-////                Color.softSandSat.ignoresSafeArea()   // ← back layer
-//
-//            // content
-//            VStack(spacing: 16) {
-////                header
-//                worldList
-//                    .frame(maxHeight: .infinity, alignment: .top)
-//                    .padding(.bottom)  // nudge vertical
-//                Spacer(minLength: 8)
-//            }
-//            .padding(.horizontal)
-//        }
-//
-//            .background {
-//                Image("Sqword-Splash")
-//                    .resizable()
-//                    .scaledToFill()
-//                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-//                    .clipped()
-//                    .ignoresSafeArea()
-//                    .allowsHitTesting(false)
-//            }
-//
-//        return main
-//            .navigationBarBackButtonHidden(true)
-//        
-//
-//        
-////            .toolbar {
-////                ToolbarItem(placement: .navigationBarLeading) {
-////                    Button {
-////                        //handleBack()
-////                        dismiss()
-////                    } label: {
-////                        HStack(spacing: 8) {
-////                            Image(systemName: "chevron.left").imageScale(.medium)
-////                            Text("Back")
-////                        }
-////                        .foregroundStyle(.primary)
-////                    }
-////                    .buttonStyle(SoftRaisedPillStyle(height: 36))
-////                }
-////
-////                ToolbarItem(placement: .principal) {
-////                    Text("Sqword")
-////                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-////                        .tracking(2)
-////                        .foregroundStyle(Color.black)
-////                }
-////
-////
-////            }
-////            .toolbarBackground(.clear, for: .navigationBar)
-////            .toolbarBackground(.visible, for: .navigationBar)
-//        
-//
-
-//
-//    // MARK: Header spacer (toolbar holds the actual header UI)
-////    private var header: some View { Color.clear.frame(height: 1) }
-//
-
-//
-
-
-
-    
+   
     // MARK: Small pill components
     @ViewBuilder
     private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
