@@ -22,7 +22,9 @@ struct LevelsView: View {
     // Navigation
     @State private var navigateToLevel = false
     @State private var levelWorld: World?
-
+    @State private var showFinishLottie = false
+    @State private var finishStopIndex = 0
+    
     // Alerts
     @State private var showInsufficientCoins = false
     @State private var showConfirmUnlock = false
@@ -33,6 +35,8 @@ struct LevelsView: View {
     @State private var walletExpansion: CGFloat = 0      // 0…1 progress (for backdrop opacity)
     @GestureState private var walletDrag: CGFloat = 0    // live drag delta (+down, −up)
     @State private var coinPulse: Bool = false
+    
+    
 
 
     var body: some View {
@@ -114,8 +118,9 @@ struct LevelsView: View {
 
         .navigationDestination(isPresented: $navigateToLevel) {
             if let world = levelWorld {
-                LevelPlayView(world: world)
+                destinationView(for: world)
                     .environmentObject(game)
+                    .environmentObject(levels)
             }
         }
         
@@ -140,7 +145,7 @@ struct LevelsView: View {
         .fullScreenCover(isPresented: $showFoodIntro) {
             WorldInstructionGate(
                 animationName: "World_Instruction",
-                pauseStops: [0.01, 0.03, 0.04, 0.05],
+                pauseStops: [0.02, 0.08, 0.11],
                 onFinish: {
                     UserDefaults.standard.set(true, forKey: foodIntroSeenKey)
                     let w = pendingWorldForIntro

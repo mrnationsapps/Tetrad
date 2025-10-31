@@ -524,7 +524,7 @@ struct ContentView: View {
         #endif
 
         // Bounds for tile edge size
-        let minEdge: CGFloat = 44                  // don’t go too tiny; tweak to taste
+        let minEdge: CGFloat = 44                 // don’t go too tiny; tweak to taste
         let maxEdge: CGFloat = isiPad ? 80 : 55   // allow bigger tiles on iPad
 
         return VStack(alignment: .center, spacing: 8) {
@@ -533,7 +533,7 @@ struct ContentView: View {
                 .tracking(3)
                 .foregroundColor(.white)
                 .opacity(0.8)
-            
+
             GeometryReader { geo in
                 let W        = max(1, geo.size.width)
                 let gap      = bagGap
@@ -559,6 +559,8 @@ struct ContentView: View {
                     ForEach(bagTiles) { tile in
                         GeometryReader { cellGeo in
                             let origin = cellGeo.frame(in: .named("stage")).origin
+                            let isClarity = game.clarityHighlights.contains(tile.id)
+
                             tileView(
                                 tile,
                                 cell: fit.edge,
@@ -578,6 +580,16 @@ struct ContentView: View {
                                     isDraggingGhost = false
                                     handleDrop(of: tile, at: stagePoint)
                                     ghostTile = nil
+                                }
+                            )
+                            // 👇 Clarity highlight ring + gentle glow (on top of tileView)
+                            .overlay(
+                                Group {
+                                    if isClarity {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(Color.purple, lineWidth: 3)
+                                            .shadow(color: Color.purple.opacity(0.45), radius: 8, y: 2)
+                                    }
                                 }
                             )
                         }
@@ -601,10 +613,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 1)
         }
         .contentShape(Rectangle())
-        .offset(x:0, y:-30)
+        .offset(x: 0, y: -30)
     }
-
-
 
 
     // Single bag grid cell (square, responsive). Kept small so type-checking is fast.
@@ -616,6 +626,8 @@ struct ContentView: View {
             let toStage: (CGPoint) -> CGPoint = { pt in
                 CGPoint(x: origin.x + pt.x, y: origin.y + pt.y)
             }
+            let isClarity = game.clarityHighlights.contains(tile.id)
+            let isSelected = (selectedTileID == tile.id)
 
             tileView(
                 tile,
@@ -641,19 +653,27 @@ struct ContentView: View {
                     ghostTile = nil
                 }
             )
+            // Priority: Clarity highlight > selected ring
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(
-                        selectedTileID == tile.id ? Color.accentColor : .clear,
-                        lineWidth: 2
-                    )
+                Group {
+                    if isClarity {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.purple, lineWidth: 3)
+                            .shadow(color: Color.purple.opacity(0.45), radius: 8, y: 2)
+                    } else if isSelected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    }
+                }
             )
+            .accessibilityHint(isClarity ? "Helpful letter highlighted" : "")
             .onTapGesture {
                 selectedTileID = (selectedTileID == tile.id) ? nil : tile.id
             }
         }
         .aspectRatio(1, contentMode: .fit) // keep the grid cell square
     }
+
 
 
 

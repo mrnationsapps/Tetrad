@@ -19,7 +19,9 @@ struct LevelPlayView: View {
     // 🎬 Coin reward flow
     @State private var showCoinOverlay = false
     @State private var pendingRewardCoins = 0
-
+    @State private var showFinishLottie = false
+    @State private var finishStopIndex = 0
+    
     // Banner state
     @State private var showWorldBanner = false
     @State private var bannerWasShown = false
@@ -69,32 +71,63 @@ struct LevelPlayView: View {
             triggerWorldBanner()
         }
 
-        // Solve handling: compute reward, then show the simple win overlay.
         .onChange(of: game.solved) { _, isSolved in
             guard isSolved && game.isLevelMode else { return }
 
-            let fireWin = {
-                // Compute and store the pending reward (don’t add coins yet).
-                let payout = levels.rewardCoins(for: game.moveCount, par: par)
-                pendingRewardCoins = max(0, payout.total)
+            // Compute reward up front (don’t credit yet)
+            let payout = levels.rewardCoins(for: game.moveCount, par: par)
+            pendingRewardCoins = max(0, payout.total)
 
-                withAnimation(.spring()) { showWin = true }
+            // If the world banner is up, wait a touch so we don't overlap
+            let presentFinishLottie = {
+                finishStopIndex = 0
+                showFinishLottie = true
             }
 
             if showWorldBanner || pendingWinDelay {
                 pendingWinDelay = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     pendingWinDelay = false
-                    fireWin()
+                    presentFinishLottie()
                 }
             } else {
-                fireWin()
+                presentFinishLottie()
             }
         }
 
 
+
         .overlay(generatingOverlay)
 
+        .overlay {
+            if showFinishLottie {
+                ZStack {
+                    Color.black.opacity(0.22).ignoresSafeArea()
+
+                    WorldLottiePlayer(
+                        name: "Finished Animation 01",
+                        stops: [0, 1],                   // straight through
+                        index: $finishStopIndex,
+                        onFinished: {
+                            // 1) Dismiss finish animation
+                            showFinishLottie = false
+                            // 2) Then present your existing win panel (with Continue)
+                            DispatchQueue.main.async {
+                                withAnimation(.spring()) { showWin = true }
+                            }
+                        }
+                    )
+                    .scaleEffect(UIDevice.current.userInterfaceIdiom == .phone ? 1.4 : 1.0)
+                    .contentShape(Rectangle())
+                    // Optional: allow tap-to-skip to end
+                    // .onTapGesture { finishStopIndex = 1 }
+                }
+                .transition(.opacity)
+                .zIndex(115)
+            }
+        }
+
+        
         // Simple win overlay (no coin value, just Continue)
         .overlay(winOverlay)
 

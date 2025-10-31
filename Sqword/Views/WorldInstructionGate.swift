@@ -27,6 +27,12 @@ struct WorldInstructionGate: View {
                 index: $currentStopIndex,
                 onFinished: onFinish
             )
+            
+            .scaleEffect(
+                UIDevice.current.userInterfaceIdiom == .phone ? 1.5 : 1.0,
+                anchor: .center
+            )
+            
             .background {
                 Image("Sqword-Splash")
                     .resizable()

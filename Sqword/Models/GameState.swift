@@ -37,6 +37,8 @@ final class GameState: ObservableObject {
     @Published var boostsPurchasedTotal: Int = 0
     @Published var worldsUnlockedCount: Int = 0
 
+    @Published var clarityHighlights: Set<UUID> = []
+
 
     // Smart Boost locks (runtime + persisted-by-coord for Daily)
     @Published var boostedLockedTileIDs: Set<UUID> = []      // runtime-only (IDs change per session)
@@ -64,9 +66,63 @@ final class GameState: ObservableObject {
         var worldsUnlockedCount: Int
     }
 
+    /// Highlights one useful bag tile (needed for the current world word) for a short time.
+    /// Returns true if a tile was highlighted.
+    @MainActor
+    func applyClarityHighlight(duration: TimeInterval = 6.0) -> Bool {
+        // Need a target word and tiles
+        guard let worldWord = self.worldWord, !worldWord.isEmpty else { return false }
+
+        // Build the count of letters still needed for the world word
+        let needed = lettersStillNeededForWorldWord()
+
+        // Find a bag tile whose letter is still needed
+        let bagTiles = tiles.filter { if case .bag = $0.location { return true } else { return false } }
+        guard let target = bagTiles.first(where: { needed[$0.letter, default: 0] > 0 }) else {
+            return false
+        }
+
+        // Mark highlight
+        clarityHighlights.insert(target.id)
+
+        // Auto-clear after duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.clarityHighlights.remove(target.id)
+        }
+        return true
+    }
+
+    /// Multiset of letters still needed to complete the world word,
+    /// subtracting correctly placed letters already on the board.
+    private func lettersStillNeededForWorldWord() -> [Character: Int] {
+        guard let worldWord = self.worldWord?.lowercased(), worldWord.count == 4 else {
+            return [:]
+        }
+        // Count letters in world word
+        var need: [Character: Int] = [:]
+        for ch in worldWord { need[ch, default: 0] += 1 }
+
+        // Subtract correctly placed instances already on the board
+        // (works whether you're solving rows/cols; we only care about exact matches vs solution)
+        guard let solution = self.solution, solution.count == 4 else { return need }
+        for r in 0..<4 {
+            for c in 0..<4 {
+                guard let id = board[r][c],
+                      let tile = tiles.first(where: { $0.id == id }) else { continue }
+                let correctChar = Array(solution[r])[c]
+                if tile.letter == correctChar {
+                    // If this correct letter is also part of the world word need set, decrement it
+                    if need[Character(correctChar.lowercased())] != nil {
+                        need[Character(correctChar.lowercased())]! = max(0, need[Character(correctChar.lowercased())]! - 1)
+                    }
+                }
+            }
+        }
+        return need
+    }
+    
     
     // MARK: - Convenience entry points (Daily vs Level)
-
 
     func startDailyRun() {
         startRun(mode: .daily)
