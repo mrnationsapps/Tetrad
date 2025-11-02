@@ -63,6 +63,46 @@ extension Achievement {
         ),
 
         .init(
+            key: "unlock_second_world",
+            title: "Steppin' Out",
+            subtitle: "Unlock two Worlds.",
+            rewardCoins: 20,
+            condition: { $0.worldsUnlockedCount >= 2 }
+        ),
+
+        .init(
+            key: "unlock_third_world",
+            title: "Explorer",
+            subtitle: "Unlock three Worlds.",
+            rewardCoins: 30,
+            condition: { $0.worldsUnlockedCount >= 3 }
+        ),
+        
+        .init(
+            key: "unlock_forth_world",
+            title: "World Traveler",
+            subtitle: "Unlock four Worlds.",
+            rewardCoins: 40,
+            condition: { $0.worldsUnlockedCount >= 4 }
+        ),
+    
+        .init(
+            key: "unlock_fifth_world",
+            title: "Magellan",
+            subtitle: "Unlock five Worlds.",
+            rewardCoins: 50,
+            condition: { $0.worldsUnlockedCount >= 5 }
+        ),
+    
+        .init(
+            key: "unlock_sixth_world",
+            title: "Globe Trotter",
+            subtitle: "Unlock six Worlds.",
+            rewardCoins: 60,
+            condition: { $0.worldsUnlockedCount >= 6 }
+        ),
+        
+        .init(
             key: "five_levels",
             title: "Just Getting Started",
             subtitle: "Solve 5 Levels.",
@@ -98,15 +138,40 @@ extension Achievement {
             key: "streak_7_daily",
             title: "Hot Streak",
             subtitle: "7-day Daily streak.",
-            rewardCoins: 15,
+            rewardCoins: 45,
             condition: { $0.streak >= 7 }
         ),
-
+        
+        .init(
+            key: "daily_coins",
+            title: "Come Back Tomorrow",
+            subtitle: "Congrats, you're hooked.",
+            rewardCoins: 15,
+            condition: { game in
+                // Only unlockable if:
+                // 1. They've solved at least one daily (so they understand the game)
+                // 2. They haven't claimed today yet
+                guard game.totalDailiesSolved >= 1 else { return false }
+                
+                let lastClaimedKey = "ach.daily_coins.lastClaimed"
+                let lastClaimed = UserDefaults.standard.string(forKey: lastClaimedKey)
+                
+                // Get today's date in UTC
+                let formatter = ISO8601DateFormatter()
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                formatter.formatOptions = [.withFullDate]
+                let today = formatter.string(from: Date())
+                
+                // Can claim if never claimed before, or last claimed on a different day
+                return lastClaimed != today
+            }
+        ),
+        
         .init(
             key: "efficient_10",
             title: "Efficient Thinker",
             subtitle: "Solve in 10 moves or fewer.",
-            rewardCoins: 25,
+            rewardCoins: 60,
             // Mode-agnostic, persists once earned
             condition: { _ in
                 UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_10")
@@ -117,16 +182,149 @@ extension Achievement {
             key: "perfect_fill",
             title: "Perfect Fill",
             subtitle: "Finish with no boosts.",
-            rewardCoins: 15,
+            rewardCoins: 60,
             // Mode-agnostic, persists once earned
             condition: { _ in
                 UserDefaults.standard.bool(forKey: "ach.unlocked.perfect_fill")
             }
         ),
+        
+            .init(
+                key: "complete_food_world",
+                title: "Culinary Expert",
+                subtitle: "Complete all Food World levels.",
+                rewardCoins: 100,
+                condition: { _ in
+                    UserDefaults.standard.bool(forKey: "world.food.completed")
+                }
+            ),
+
+            .init(
+                key: "ten_world_words",
+                title: "Word Hunter",
+                subtitle: "Find 10 World Words.",
+                rewardCoins: 50,
+                condition: { _ in
+                    UserDefaults.standard.integer(forKey: "stats.worldWordsFound") >= 10
+                }
+            ),
+        
+            .init(
+                key: "ten_boosts",
+                title: "Power User",
+                subtitle: "Buy 10 Boosts.",
+                rewardCoins: 80,
+                condition: { $0.boostsPurchasedTotal >= 10 }
+            ),
+
+            .init(
+                key: "fifty_boosts",
+                title: "Boost Enthusiast",
+                subtitle: "Buy 50 Boosts.",
+                rewardCoins: 120,
+                condition: { $0.boostsPurchasedTotal >= 50 }
+            ),
+
+            .init(
+                key: "coin_collector",
+                title: "Coin Collector",
+                subtitle: "Accumulate 150 coins.",
+                rewardCoins: 60,
+                condition: { _ in
+                    // You'd need to track total coins earned in GameState
+                    UserDefaults.standard.integer(forKey: "stats.totalCoinsEarned") >= 150
+                }
+            ),
+        
+            .init(
+                key: "streak_14_daily",
+                title: "Two Week Warrior",
+                subtitle: "14-day Daily streak.",
+                rewardCoins: 100,
+                condition: { $0.streak >= 14 }
+            ),
+
+            .init(
+                key: "streak_30_daily",
+                title: "Monthly Master",
+                subtitle: "30-day Daily streak.",
+                rewardCoins: 100,
+                condition: { $0.streak >= 30 }
+            ),
+
+            .init(
+                key: "streak_100_daily",
+                title: "Dedication Incarnate",
+                subtitle: "100-day Daily streak.",
+                rewardCoins: 200,
+                condition: { $0.streak >= 100 }
+            ),
+        
+            .init(
+                key: "ten_levels",
+                title: "Warming Up",
+                subtitle: "Solve 10 Levels.",
+                rewardCoins: 80,
+                condition: { $0.totalLevelsSolved >= 10 }
+            ),
+
+            .init(
+                key: "twenty_five_levels",
+                title: "Committed Player",
+                subtitle: "Solve 25 Levels.",
+                rewardCoins: 100,
+                condition: { $0.totalLevelsSolved >= 25 }
+            ),
+
+            .init(
+                key: "fifty_levels",
+                title: "Half Century",
+                subtitle: "Solve 50 Levels.",
+                rewardCoins: 150,
+                condition: { $0.totalLevelsSolved >= 50 }
+            ),
+
+            .init(
+                key: "hundred_levels",
+                title: "Century Club",
+                subtitle: "Solve 100 Levels.",
+                rewardCoins: 200,
+                condition: { $0.totalLevelsSolved >= 100 }
+            ),
+        
+            .init(
+                key: "efficient_5",
+                title: "Speed Demon",
+                subtitle: "Solve in 5 moves or fewer.",
+                rewardCoins: 150,
+                condition: { _ in
+                    UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_5")
+                }
+            ),
+
+            .init(
+                key: "efficient_15",
+                title: "Getting the Hang of It",
+                subtitle: "Solve in 15 moves or fewer.",
+                rewardCoins: 60,
+                condition: { _ in
+                    UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_15")
+                }
+            ),
+
+            .init(
+                key: "world_word_speedrun",
+                title: "Quick Study",
+                subtitle: "Find a World Word in under 5 moves.",
+                rewardCoins: 40,
+                condition: { _ in
+                    UserDefaults.standard.bool(forKey: "ach.unlocked.world_word_speedrun")
+                }
+            ),
 
         .init(
             key: "daily_return",
-            title: "Come Back Tomorrow",
+            title: "Daily Again? Heck yes.",
             subtitle: "Solve two dailies in a row.",
             rewardCoins: 10,
             condition: { $0.streak >= 2 }
@@ -149,6 +347,16 @@ extension Achievement {
         var total = 0
         for a in pending where !a.isClaimed() {
             a.markClaimed()
+            
+            // Special handling for daily_coins - track claim date
+            if a.key == "daily_coins" {
+                let formatter = ISO8601DateFormatter()
+                formatter.timeZone = TimeZone(secondsFromGMT: 0)
+                formatter.formatOptions = [.withFullDate]
+                let today = formatter.string(from: Date())
+                UserDefaults.standard.set(today, forKey: "ach.daily_coins.lastClaimed")
+            }
+            
             total += a.rewardCoins
         }
         if total > 0 { levels.addCoins(total) }

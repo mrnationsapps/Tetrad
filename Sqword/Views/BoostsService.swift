@@ -10,100 +10,123 @@ import Combine
 
 @MainActor
 final class BoostsService: ObservableObject {
-    // 🛑 Purchased-only model: no daily freebies.
-    // We keep `remaining` for UI compatibility but it is always 0.
-    private let keyPurchased     = "boosts.purchased"     // persistent purchases
-    private let keyLastResetUTC  = "boosts.lastResetUTC"  // yyyy-MM-dd (UTC)
-    private let legacyKeyRemaining = "boosts.remaining"   // legacy daily bucket (ignore)
+    enum BoostKind { case reveal, clarity }
 
-    // Live state
-    @Published private(set) var purchased: Int
-    @Published private(set) var remaining: Int = 0  // legacy, always 0
+    private let keyPurchased       = "boosts.purchased"
+    private let keyLastResetUTC    = "boosts.lastResetUTC"
+    private let legacyKeyRemaining = "boosts.remaining"
+    private let kReveal            = "boosts.reveal.count"
+    private let kClarity           = "boosts.clarity.count"
 
-    // Callbacks (wired from App)
+    @Published private(set) var purchased: Int         // legacy bucket (kept for migration/toast)
+    @Published private(set) var remaining: Int = 0     // legacy, always 0
+    @Published private(set) var revealRemaining: Int
+    @Published private(set) var clarityRemaining: Int
+
     var onBoostUsed: (() -> Void)?
     var onBoostPurchased: ((Int) -> Void)?
 
-    // MARK: - Init
     init() {
         let d = UserDefaults.standard
-        // Load purchased (defaults to 0)
-        self.purchased = max(0, d.integer(forKey: keyPurchased))
 
-        // 🔧 Migration: if a legacy daily value exists, zero it out.
+        // 1) Load legacy purchased first (local), sanitize
+        let initialPurchased = max(0, d.integer(forKey: keyPurchased))
+
+        // 2) Load new per-kind counts (locals)
+        let storedReveal  = d.object(forKey: kReveal)  as? Int
+        let storedClarity = d.object(forKey: kClarity) as? Int
+
+        // 3) Compute starting inventories (locals)
+        //    If this is the first run on the new scheme, migrate legacy `purchased` into Reveal.
+        let startReveal  = max(0, storedReveal  ?? initialPurchased)
+        let startClarity = max(0, storedClarity ?? 0)
+
+        // 4) Now assign all stored properties
+        self.purchased        = initialPurchased
+        self.revealRemaining  = startReveal
+        self.clarityRemaining = startClarity
+
+        // 5) Clean up truly old daily key
         if d.object(forKey: legacyKeyRemaining) != nil {
             d.set(0, forKey: legacyKeyRemaining)
         }
 
-        // Stamp the day so resetIfNeeded remains harmless
+        // 6) Persist day stamp + the new per-kind counts
         persist()
-        resetIfNeeded()
 
         #if DEBUG
-        print("🟣 BoostsService init (purchased-only) purch=\(purchased)")
+        print("🟣 BoostsService init → purch=\(purchased) reveal=\(revealRemaining) clarity=\(clarityRemaining)")
         #endif
     }
 
     // MARK: - Public API
 
-    /// Total usable boosts (purchased-only model).
-    var totalAvailable: Int { purchased }
+    func count(for kind: BoostKind) -> Int {
+        switch kind {
+        case .reveal:  return revealRemaining
+        case .clarity: return clarityRemaining
+        }
+    }
 
-    /// Spend one boost if available (consumes **purchased** first).
     @discardableResult
-    func useOne() -> Bool {
-        guard purchased > 0 else { return false }
-        purchased -= 1
+    func useOne(kind: BoostKind) -> Bool {
+        switch kind {
+        case .reveal:
+            guard revealRemaining > 0 else { return false }
+            revealRemaining -= 1
+        case .clarity:
+            guard clarityRemaining > 0 else { return false }
+            clarityRemaining -= 1
+        }
         persist()
         onBoostUsed?()
-        #if DEBUG
-        print("🟣 useOne OK → purch=\(purchased)")
-        #endif
         return true
     }
 
-    /// Grant free boosts to the purchased pool (rewards/promo).
-    func grant(count: Int) {
-        purchase(count: count)
-    }
-
-    /// Add boosts to the purchased pool (IAP or wallet buys).
-    func purchase(count: Int) {
+    func grant(count: Int, kind: BoostKind) {
         guard count > 0 else { return }
-        purchased += count
+        switch kind {
+        case .reveal:  revealRemaining  += count
+        case .clarity: clarityRemaining += count
+        }
         persist()
         onBoostPurchased?(count)
-        #if DEBUG
-        print("🟣 purchase(+\(count)) → purch=\(purchased)")
-        #endif
     }
 
-    /// Keep the stored UTC day up to date; no daily refill.
-    func resetIfNeeded(date: Date = Date()) {
-        let todayUTC = Self.utcDayString(date: date)
-        let d = UserDefaults.standard
-        let last = d.string(forKey: keyLastResetUTC)
-        if last != todayUTC {
-            d.set(todayUTC, forKey: keyLastResetUTC)
-            persist()
-        }
-    }
+    // If you still need the legacy helpers elsewhere:
+    var totalAvailable: Int { revealRemaining + clarityRemaining }
 
     // MARK: - Persistence
 
     private func persist() {
         let d = UserDefaults.standard
-        d.set(purchased, forKey: keyPurchased)
+        d.set(purchased, forKey: keyPurchased) // keep writing for old code paths
+        d.set(revealRemaining,  forKey: kReveal)
+        d.set(clarityRemaining, forKey: kClarity)
         d.set(Self.utcDayString(date: Date()), forKey: keyLastResetUTC)
     }
 
-    // MARK: - Utils
+    func resetIfNeeded(date: Date = Date()) {
+        let d = UserDefaults.standard
+        let today = Self.utcDayString(date: date)
+        if d.string(forKey: keyLastResetUTC) != today {
+            d.set(today, forKey: keyLastResetUTC)
+            persist()
+        }
+    }
 
+    /// Purchase (legacy). Treat as purchasing **Reveal**.
+    func purchase(count: Int) {
+        grant(count: count, kind: .reveal)
+    }
+    
     private static func utcDayString(date: Date) -> String {
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(secondsFromGMT: 0)! // UTC
-        let comps = cal.dateComponents([.year, .month, .day], from: date)
-        let y = comps.year!, m = comps.month!, d = comps.day!
-        return String(format: "%04d-%02d-%02d", y, m, d)
+        cal.timeZone = TimeZone(secondsFromGMT: 0)!
+        let c = cal.dateComponents([.year,.month,.day], from: date)
+        return String(format:"%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 }
+
+
+

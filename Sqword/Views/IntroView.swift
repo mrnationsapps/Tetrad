@@ -21,6 +21,9 @@ struct IntroView: View {
     @State private var lastAwardedCoins = 0
     @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
 
+    @StateObject private var soundFX = SoundEffects.shared
+
+
     var body: some View {
         ZStack {
             // ✅ Full-bleed background outside the NavigationStack
@@ -191,6 +194,7 @@ private extension IntroView {
     var bottomCTA: some View {
         VStack(spacing: 12) {
             Button {
+                soundFX.playButton()
                 navigateToLevels = true
             } label: {
                 HStack(spacing: 8) {
@@ -204,6 +208,7 @@ private extension IntroView {
 
             if tutorialCompleted {
                 Button {
+                    soundFX.playButton()
                     game.startDailyRun()
                     navigateToGame = true
                 } label: {
@@ -248,6 +253,7 @@ struct AchievementRow: View {
     var onClaimed: (Int) -> Void
 
     @State private var claimed: Bool = false
+    @StateObject private var soundFX = SoundEffects.shared
 
     private var rewardAmount: Int { achievement.rewardCoins }
     private var claimKey: String { "ach.claimed.\(achievement.key)" }
@@ -281,6 +287,7 @@ struct AchievementRow: View {
     }
 
     private func claim() {
+        soundFX.playChestOpenSequence()
         UserDefaults.standard.set(true, forKey: claimKey)
         claimed = true
         onClaimed(rewardAmount)

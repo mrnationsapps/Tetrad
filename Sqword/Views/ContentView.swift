@@ -80,6 +80,23 @@ struct ContentView: View {
         }
     }
 
+    private struct ClarityTint: ViewModifier {
+        let active: Bool
+        func body(content: Content) -> some View {
+            if active {
+                content
+                    .colorMultiply(.purple) // tints the tile but preserves the glyph
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
+            } else {
+                content
+            }
+        }
+    }
+
+    
     // Hold the live map
     @State private var cellStageRects: [BoardCoord: CGRect] = [:]
 
@@ -274,9 +291,19 @@ struct ContentView: View {
             boostsAvailable: boosts.remaining,
             isInteractable: true,
             disabledStyle: .standard,
-            boostsPanel: { dismiss in DailyBoostsPanel(dismiss: dismiss) },
-            walletPanel: { dismiss in WalletPanelView(dismiss: dismiss) }   // 👈 shared
-        )
+            boostsPanel: { dismiss in
+                DailyBoostsPanel(
+                    dismiss: dismiss,
+                    isLevelMode: world != nil  // ✅ Pass the mode
+                )
+            },
+            walletPanel: { dismiss in
+                WalletPanelView(
+                    dismiss: dismiss,
+                    showCoinOverlay: .constant(false),  // Daily mode doesn't need coin overlay from wallet
+                    pendingRewardCoins: .constant(0)
+                )
+            }        )
     }
 
 
@@ -285,6 +312,9 @@ struct ContentView: View {
         @EnvironmentObject var game: GameState
         @EnvironmentObject var boosts: BoostsService
         let dismiss: () -> Void
+        
+        // NEW: pass in whether this is a level (has world words)
+        let isLevelMode: Bool
 
         @State private var errorText: String?
 
@@ -296,31 +326,32 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(boosts.totalAvailable) available")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+//                    Text("\(boosts.totalAvailable) available")
+//                        .font(.footnote)
+//                        .foregroundStyle(.secondary)
                 }
 
-                // Tiles row
+                let revealCount  = boosts.revealRemaining  // ✅ Fixed
+                let clarityCount = boosts.clarityRemaining
+
                 HStack(alignment: .top, spacing: 12) {
-                    // REVEAL (active)
+                    // REVEAL
                     Button(action: useSmartBoost) {
-                        BoostTile(icon: "wand.and.stars", title: "Reveal")
+                        BoostTile(icon: "wand.and.stars", title: "Reveal", style: .panelChip, count: revealCount)
                     }
                     .buttonStyle(.plain)
-                    .disabled(boosts.totalAvailable == 0)
-                    .opacity(boosts.totalAvailable == 0 ? 0.4 : 1.0)
+                    .disabled(revealCount == 0)
+                    .opacity(revealCount == 0 ? 0.4 : 1.0)
                     .alignmentGuide(.top) { d in d[.top] }
 
-                    // Placeholders
-                    BoostTile(icon: "arrow.left.arrow.right", title: "Swap")
-                        .opacity(0.35)
-                        .alignmentGuide(.top) { d in d[.top] }
-
-                    BoostTile(icon: "eye", title: "Clarity")
-                        .opacity(0.35)
-                        .alignmentGuide(.top) { d in d[.top] }
-                        .padding(.top, 10)
+                    // CLARITY (only available in level mode)
+                    Button(action: useClarityBoost) {
+                        BoostTile(icon: "eye", title: "Clarity", style: .panelChip, count: clarityCount)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isLevelMode || clarityCount == 0)  // ✅ Disabled in Daily
+                    .opacity(!isLevelMode || clarityCount == 0 ? 0.4 : 1.0)
+                    .alignmentGuide(.top) { d in d[.top] }
                 }
 
                 if let errorText {
@@ -333,15 +364,26 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
 
-        private func useSmartBoost() {
-            guard boosts.totalAvailable > 0 else {
-                errorText = "No Boosts left."
+        private func useClarityBoost() {
+            guard isLevelMode else {
+                errorText = "Clarity only works in World levels."
                 return
             }
+            guard boosts.clarityRemaining > 0 else { errorText = "No Clarities left."; return }
+            if game.applyClarityBoost() {
+                _ = boosts.useOne(kind: .clarity)
+                #if os(iOS)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+            } else {
+                errorText = "Nothing to highlight right now."
+            }
+        }
 
-            // Try placing first; only consume if it worked
+        private func useSmartBoost() {
+            guard boosts.revealRemaining > 0 else { errorText = "No Reveals left."; return }
             if game.applySmartBoost(movePenalty: 10) {
-                _ = boosts.useOne()
+                _ = boosts.useOne(kind: .reveal)
                 #if os(iOS)
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 #endif
@@ -352,27 +394,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Small tile used in Boosts panel
-    private struct BoostTile: View {
-        let icon: String
-        let title: String
-        var body: some View {
-            VStack(spacing: 6) {
-                Image(systemName: icon).font(.headline)
-                Text(title).font(.caption)
-            }
-            .foregroundStyle(.primary)
-            .padding(.vertical, 12).padding(.horizontal, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-                    )
-            )
-        }
-    }
+
     
     // MARK: - Header / Footer
 
@@ -400,19 +422,7 @@ struct ContentView: View {
         .padding(.bottom, 8)
     }
 
-    // Reusable tile view (top-aligned content inside a fixed 72×72)
-    @ViewBuilder
-    private func boostTile(icon: String, title: String, material: Material) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon).font(.title2)
-            Text(title).font(.caption)
-        }
-        .frame(width: 72, height: 72)
-        .background(material)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .alignmentGuide(.top) { d in d[.top] }           // 👈 report our own top
-    }
-
+    
     // MARK: - Board (responsive, centered, correct drop mapping)
     private var boardView: some View {
         GeometryReader { geo in
@@ -537,7 +547,7 @@ struct ContentView: View {
             GeometryReader { geo in
                 let W        = max(1, geo.size.width)
                 let gap      = bagGap
-                let total    = max(1, game.tiles.count)   // usually 16
+                let total    = max(1, bagTiles.count)   // ← use only bag tiles
 
                 // Compute best fit (imperative logic kept out of ViewBuilder)
                 let fit = bestBagFit(width: W,
@@ -557,43 +567,9 @@ struct ContentView: View {
 
                 LazyVGrid(columns: columns, spacing: gap) {
                     ForEach(bagTiles) { tile in
-                        GeometryReader { cellGeo in
-                            let origin = cellGeo.frame(in: .named("stage")).origin
-                            let isClarity = game.clarityHighlights.contains(tile.id)
-
-                            tileView(
-                                tile,
-                                cell: fit.edge,
-                                gap: boardGap,
-                                toStage: { pt in CGPoint(x: origin.x + pt.x, y: origin.y + pt.y) },
-                                onDragBegan: {
-                                    if !isDraggingGhost {
-                                        ghostTile = tile
-                                        ghostSize = .init(width: fit.edge, height: fit.edge)
-                                        isDraggingGhost = true
-                                    }
-                                },
-                                onDragChanged: { stagePoint in
-                                    ghostStagePoint = stagePoint
-                                },
-                                onDragEnded: { stagePoint in
-                                    isDraggingGhost = false
-                                    handleDrop(of: tile, at: stagePoint)
-                                    ghostTile = nil
-                                }
-                            )
-                            // 👇 Clarity highlight ring + gentle glow (on top of tileView)
-                            .overlay(
-                                Group {
-                                    if isClarity {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(Color.purple, lineWidth: 3)
-                                            .shadow(color: Color.purple.opacity(0.45), radius: 8, y: 2)
-                                    }
-                                }
-                            )
-                        }
-                        .frame(width: fit.edge, height: fit.edge)
+                        // Delegate the cell rendering to the single source of truth:
+                        bagTileCell(tile)
+                            .frame(width: fit.edge, height: fit.edge)
                     }
                 }
                 .frame(width: gridWidth, height: targetHeight, alignment: .top)
@@ -615,6 +591,8 @@ struct ContentView: View {
         .contentShape(Rectangle())
         .offset(x: 0, y: -30)
     }
+
+
 
 
     // Single bag grid cell (square, responsive). Kept small so type-checking is fast.
@@ -653,26 +631,30 @@ struct ContentView: View {
                     ghostTile = nil
                 }
             )
+            
+            .modifier(ClarityTint(active: isClarity))   // 👈 tint instead of stroke
+
             // Priority: Clarity highlight > selected ring
-            .overlay(
-                Group {
-                    if isClarity {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.purple, lineWidth: 3)
-                            .shadow(color: Color.purple.opacity(0.45), radius: 8, y: 2)
-                    } else if isSelected {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.accentColor, lineWidth: 2)
-                    }
-                }
-            )
-            .accessibilityHint(isClarity ? "Helpful letter highlighted" : "")
-            .onTapGesture {
-                selectedTileID = (selectedTileID == tile.id) ? nil : tile.id
-            }
+//            .overlay(
+//                Group {
+//                    if isClarity {
+//                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+//                            .stroke(Color.purple, lineWidth: 3)
+//                            .shadow(color: Color.purple.opacity(0.45), radius: 8, y: 2)
+//                    } else if isSelected {
+//                        RoundedRectangle(cornerRadius: 8)
+//                            .stroke(Color.accentColor, lineWidth: 2)
+//                    }
+//                }
+//            )
+//            .accessibilityHint(isClarity ? "Helpful letter highlighted" : "")
+//            .onTapGesture {
+//                selectedTileID = (selectedTileID == tile.id) ? nil : tile.id
+//            }
         }
         .aspectRatio(1, contentMode: .fit) // keep the grid cell square
     }
+
 
 
 
@@ -1096,7 +1078,8 @@ struct ContentView: View {
 
             // Place the tile
             game.placeTile(tile, at: coord)
-
+            game.clarityHighlights.remove(tile.id)          // 👈 clear highlight on use
+ 
             // Count a move ONLY if it came from the bag AND replaced an existing board tile
             if cameFromBag && isOccupied {
                 // Prefer your central counter if you have it:

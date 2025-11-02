@@ -57,7 +57,7 @@ enum WorldsCatalog {
 
         World(id: "tech",
               name: "Technology",
-              artName: "Technology",
+              artName: "Retro",
               unlockCost: 30,
               dictionaryID: "Technology_Dictionary",
               isTutorial: false),
@@ -159,14 +159,14 @@ struct WorldsWalletPanel: View {
             }
 
             // Buy Boosts
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
-                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
-                }
-            }
+//            VStack(alignment: .leading, spacing: 8) {
+//                Text("Buy Boosts").font(.subheadline).foregroundStyle(.secondary)
+//                HStack(spacing: 10) {
+//                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×1",  cost: 5)  { buyReveal(cost: 5,  count: 1) }
+//                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×3",  cost: 12) { buyReveal(cost: 12, count: 3) }
+//                    walletBoostPill(icon: "wand.and.stars", title: "Reveal ×10", cost: 35) { buyReveal(cost: 35, count: 10) }
+//                }
+//            }
 
             // Get Coins (IAP stubs)
             VStack(alignment: .leading, spacing: 8) {

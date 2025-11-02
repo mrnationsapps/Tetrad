@@ -8,6 +8,7 @@ struct BoostCenterView: View {
     @State private var confirmSmartBoost = false
     @State private var errorText: String?
 
+
     var body: some View {
         NavigationStack {
             List {
@@ -76,15 +77,36 @@ struct BoostCenterView: View {
     }
 
     private func useSmartBoost() {
-        guard boosts.useOne() else {
+        // spend REVEAL
+        guard boosts.count(for: .reveal) > 0 else {
             errorText = "No Boosts left."
             return
         }
         if game.applySmartBoost(movePenalty: 10) {
+            _ = boosts.useOne(kind: .reveal)
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
             dismiss()
         } else {
-            // (Optional) If you add a refund API on BoostsService, call it here.
             errorText = "No safe placement found. Try adjusting the board first."
+        }
+    }
+    
+    private func useClarityBoost() {
+        // spend CLARITY
+        guard boosts.count(for: .clarity) > 0 else {
+            errorText = "No Clarity boosts left."
+            return
+        }
+        if game.applyClarityBoost() {
+            _ = boosts.useOne(kind: .clarity)
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
+            dismiss()
+        } else {
+            errorText = "Nothing to highlight right now."
         }
     }
 }

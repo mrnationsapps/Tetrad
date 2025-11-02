@@ -33,6 +33,9 @@ struct LevelPlayView: View {
     @State private var walletTargetGlobal: CGPoint? = nil
     // @State private var rewardCount: Double = 0   // no longer used
     @State private var coinFly = false
+    @StateObject private var soundFX = SoundEffects.shared
+
+
 
     private func handleBack() {
         game.persistAllSafe()   // ensure snapshot is written
@@ -122,6 +125,11 @@ struct LevelPlayView: View {
                     // Optional: allow tap-to-skip to end
                     // .onTapGesture { finishStopIndex = 1 }
                 }
+                .onAppear {
+                    Task { @MainActor in
+                        SoundEffects.shared.play("WonLevel.m4a", volume: 0.8)
+                    }
+                }
                 .transition(.opacity)
                 .zIndex(115)
             }
@@ -205,23 +213,23 @@ struct LevelPlayView: View {
         }
     }
 
-    @ViewBuilder
-    private func boostTile(icon: String, title: String, material: Material) -> some View {
-        VStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(material)
-                    .frame(width: 88, height: 88)
-
-                Image(systemName: icon)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
-            Text(title)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.primary)
-        }
-    }
+//    @ViewBuilder
+//    private func boostTile(icon: String, title: String, material: Material) -> some View {
+//        VStack(spacing: 8) {
+//            ZStack {
+//                RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                    .fill(material)
+//                    .frame(width: 88, height: 88)
+//
+//                Image(systemName: icon)
+//                    .font(.system(size: 28, weight: .semibold))
+//                    .foregroundStyle(.primary)
+//            }
+//            Text(title)
+//                .font(.footnote.weight(.semibold))
+//                .foregroundStyle(.primary)
+//        }
+//    }
 
     // MARK: - Layers
 
@@ -301,6 +309,7 @@ struct LevelPlayView: View {
                     let hasNext = levels.hasNextLevel(for: world)
 
                     Button {
+                        soundFX.playChestOpenSequence()
                         // 1) Hide the win sheet so it won't sit behind the Lottie
                         withAnimation(.easeOut(duration: 0.2)) {
                             showWin = false
@@ -310,7 +319,7 @@ struct LevelPlayView: View {
                             showCoinOverlay = true
                         }
                     } label: {
-                        Text("Continue")
+                        Text("Collect Reward!")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                     }
@@ -463,7 +472,7 @@ private struct WorldWordBanner: View {
     let word: String
     let gradient: LinearGradient
     @State private var runSheen = false
-
+    
     var body: some View {
         let label = Text(word)
             .font(.system(size: 80, weight: .heavy))
@@ -472,14 +481,14 @@ private struct WorldWordBanner: View {
             .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
-
+        
         VStack(spacing: 8) {
             Text("World Word Found!")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.90), radius: 4, x: 0, y: 1)
                 .accessibilityHidden(true)
-
+            
             label
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -494,7 +503,7 @@ private struct WorldWordBanner: View {
                     GeometryReader { geo in
                         let w = geo.size.width
                         let band = max(56, w * 0.35)
-
+                        
                         Capsule()
                             .fill(
                                 LinearGradient(
@@ -516,6 +525,13 @@ private struct WorldWordBanner: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(word))
+        }
+        
+        .onAppear {
+            // Play sound effect when banner appears
+            Task { @MainActor in
+                SoundEffects.shared.play("WorldWordFound.m4a", volume: 0.8)
+            }
         }
     }
 }

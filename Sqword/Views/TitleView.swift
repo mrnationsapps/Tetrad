@@ -4,7 +4,7 @@ struct TitleView: View {
     var onFinish: () -> Void
     @State private var appear = false
     @EnvironmentObject private var music: MusicCenter
-
+    @StateObject private var soundFX = SoundEffects.shared
 
     var body: some View {
         ZStack {
@@ -23,7 +23,10 @@ struct TitleView: View {
                 .offset(y: -100)
         }
         .overlay(alignment: .bottom) {
-            Button(action: onFinish) {
+            Button {
+                soundFX.playButton()
+                onFinish()
+            } label: {
                 Text("Continue")
                     .font(.title3).bold()
                     .foregroundStyle(.primary)
@@ -34,7 +37,10 @@ struct TitleView: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         
-        .onAppear { music.enterMenu() }
-
+        .onAppear {
+            music.enterMenu()
+            // Preload the button sound for better performance
+            soundFX.preloadSounds(["Button.m4a"])
+        }
     }
 }

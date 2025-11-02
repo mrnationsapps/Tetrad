@@ -12,6 +12,8 @@ final class GameState: ObservableObject {
     @Published var moveCount: Int = 0
     @Published var streak: Int = UserDefaults.standard.integer(forKey: "Sqword_streak")
     @Published var lastSolvedDateUTC: String? = UserDefaults.standard.string(forKey: "Sqword_lastSolvedUTC")
+    @Published var totalCoinsEarned: Int = 0
+    @Published var worldWordsFound: Int = 0
 
     // Level mode & World Word flags
     @Published var isLevelMode: Bool = false
@@ -37,7 +39,9 @@ final class GameState: ObservableObject {
     @Published var boostsPurchasedTotal: Int = 0
     @Published var worldsUnlockedCount: Int = 0
 
-    @Published var clarityHighlights: Set<UUID> = []
+    @MainActor @Published var clarityHighlights: Set<UUID> = []
+
+//    @Published var clarityHighlights: Set<UUID> = []
 
 
     // Smart Boost locks (runtime + persisted-by-coord for Daily)
@@ -64,8 +68,49 @@ final class GameState: ObservableObject {
         var totalDailiesSolved: Int
         var boostsPurchasedTotal: Int
         var worldsUnlockedCount: Int
+        var totalCoinsEarned: Int
+        var worldWordsFound: Int
     }
 
+    // MARK: - Clarity (boost)
+    @Published var clarityHighlightTileID: UUID? = nil
+
+    @MainActor
+    @discardableResult
+    func applyClarityBoost() -> Bool {
+        guard let ww = worldWord?.lowercased(), !ww.isEmpty else { return false }
+
+        // Build a multiset of needed letters for the world word
+        var need: [Character: Int] = [:]
+        for ch in ww { need[ch, default: 0] += 1 }
+
+        // Subtract letters currently on the BOARD (counts matter, duplicates too)
+        for r in 0..<4 {
+            for c in 0..<4 {
+                guard let id = board[r][c],
+                      let tile = tiles.first(where: { $0.id == id }) else { continue }
+                if let ch = tile.letter.lowercased().first, let n = need[ch], n > 0 {
+                    need[ch] = n - 1
+                }
+            }
+        }
+
+        // If nothing is needed, bail out
+        if need.values.allSatisfy({ $0 <= 0 }) { return false }
+
+        // Choose from BAG tiles that match a still-needed letter and aren’t already highlighted
+        let bagTiles = tiles.filter { $0.location == .bag && !clarityHighlights.contains($0.id) }
+        let candidates = bagTiles.filter { t in
+            guard let ch = t.letter.lowercased().first else { return false }
+            return (need[ch] ?? 0) > 0
+        }
+
+        guard let pick = candidates.randomElement() else { return false }
+        clarityHighlights.insert(pick.id)
+        return true
+    }
+
+    
     /// Highlights one useful bag tile (needed for the current world word) for a short time.
     /// Returns true if a tile was highlighted.
     @MainActor
@@ -273,6 +318,8 @@ final class GameState: ObservableObject {
             totalDailiesSolved    = t.totalDailiesSolved
             boostsPurchasedTotal  = t.boostsPurchasedTotal
             worldsUnlockedCount   = t.worldsUnlockedCount
+            totalCoinsEarned      = t.totalCoinsEarned      // NEW
+            worldWordsFound       = t.worldWordsFound       // NEW
         }
     }
 
@@ -281,7 +328,9 @@ final class GameState: ObservableObject {
             totalLevelsSolved: totalLevelsSolved,
             totalDailiesSolved: totalDailiesSolved,
             boostsPurchasedTotal: boostsPurchasedTotal,
-            worldsUnlockedCount: worldsUnlockedCount
+            worldsUnlockedCount: worldsUnlockedCount,
+            totalCoinsEarned: totalCoinsEarned,           // NEW
+            worldWordsFound: worldWordsFound              // NEW
         )
         if let data = try? JSONEncoder().encode(t) {
             UserDefaults.standard.set(data, forKey: kAchTotals)
@@ -478,8 +527,14 @@ final class GameState: ObservableObject {
 
         // Persist one-time “skill” achievements (mode-agnostic)
         let d = UserDefaults.standard
+        if moveCount <= 5 {
+            d.set(true, forKey: "ach.unlocked.efficient_5")
+        }
         if moveCount <= 10 {
             d.set(true, forKey: "ach.unlocked.efficient_10")
+        }
+        if moveCount <= 15 {
+            d.set(true, forKey: "ach.unlocked.efficient_15")
         }
         if boostsUsedThisRun == 0 {
             d.set(true, forKey: "ach.unlocked.perfect_fill")
@@ -548,6 +603,17 @@ final class GameState: ObservableObject {
 
         if worldWordJustCompleted == false {
             worldWordJustCompleted = true
+            
+            // Track world words found
+            worldWordsFound += 1
+            
+            // Check for speedrun achievement (found in under 5 moves)
+            if moveCount <= 5 {
+                UserDefaults.standard.set(true, forKey: "ach.unlocked.world_word_speedrun")
+            }
+            
+            saveAchievementTotals()
+            
             NSLog("✨ World Word complete: \(worldWord ?? "(unknown)") at index \(worldWordIndex ?? -1)")
         }
     }
@@ -1120,3 +1186,13 @@ extension GameState {
         UserDefaults.standard.removeObject(forKey: key)
     }
 }
+
+//extension GameState {
+//    /// Highlights one correct bag letter for the current World Word.
+//    /// Return true if something was highlighted; false if nothing to do.
+//    @discardableResult
+//    func applyClarityBoost() -> Bool {
+//        // TODO: real logic; stub lets you compile
+//        return true
+//    }
+//}

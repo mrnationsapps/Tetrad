@@ -29,6 +29,10 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
     // NEW: once user opens Wallet this session, stop pulsing
     @State private var walletPulseDismissed = false
 
+    // Coin chest animation state (top-level)
+    @State private var showCoinOverlay = false
+    @State private var pendingRewardCoins = 0
+
     // Panel look
     var panelHeight: CGFloat = 320
 
@@ -71,7 +75,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                 }
             }
 
-            // WALLET slide-up (with scrim)
+            // WALLET slide-up (with scrim) - always use WalletPanelView with coin overlay
             .overlay {
                 if showWallet {
                     ZStack(alignment: .bottom) {
@@ -84,9 +88,14 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                         VStack(spacing: 0) {
                             Capsule().frame(width: 44, height: 5).opacity(0.25).padding(.top, 8)
 
-                            walletPanel { withAnimation(.spring()) { showWallet = false } }
-                                .padding(16)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            // Always use WalletPanelView with coin overlay bindings
+                            WalletPanelView(
+                                dismiss: { withAnimation(.spring()) { showWallet = false } },
+                                showCoinOverlay: $showCoinOverlay,
+                                pendingRewardCoins: $pendingRewardCoins
+                            )
+                            .padding(16)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: panelHeight)
@@ -102,6 +111,26 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(50)
+                }
+            }
+
+            // 🎁 Coin chest animation (top-level, full screen)
+            .overlay {
+                if showCoinOverlay {
+                    ZStack {
+                        Color.black.opacity(0.25)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                        
+                        CoinRewardOverlay(
+                            isPresented: $showCoinOverlay,
+                            amount: pendingRewardCoins
+                        ) {
+                            pendingRewardCoins = 0
+                        }
+                    }
+                    .zIndex(250)
+                    .transition(.opacity)
                 }
             }
 
@@ -171,7 +200,6 @@ public extension View {
                 walletPanel: walletPanel,
                 disabledStyle: disabledStyle,
                 panelHeight: panelHeight
-
             )
         )
     }

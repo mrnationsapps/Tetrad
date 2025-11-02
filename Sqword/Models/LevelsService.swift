@@ -127,6 +127,13 @@ final class LevelsService: ObservableObject {
     func addCoins(_ delta: Int) {
         guard delta != 0 else { return }
         coins = max(0, coins + delta)
+        
+        // Track total coins earned (only positive amounts)
+        if delta > 0 {
+            let earned = UserDefaults.standard.integer(forKey: "stats.totalCoinsEarned")
+            UserDefaults.standard.set(earned + delta, forKey: "stats.totalCoinsEarned")
+        }
+        
         saveCoins()
     }
 
@@ -268,6 +275,12 @@ extension LevelsService {
     func advance(from world: World) {
         let idx = progress[world.id, default: 0]
         progress[world.id] = min(idx + 1, maxLevelsPerWorld - 1)
+        
+        // Check if this world is now complete
+        if progress[world.id] == maxLevelsPerWorld - 1 {
+            UserDefaults.standard.set(true, forKey: "world.\(world.id).completed")
+        }
+        
         saveProgress()
     }
 

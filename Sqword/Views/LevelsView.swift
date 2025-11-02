@@ -35,8 +35,7 @@ struct LevelsView: View {
     @State private var walletExpansion: CGFloat = 0      // 0…1 progress (for backdrop opacity)
     @GestureState private var walletDrag: CGFloat = 0    // live drag delta (+down, −up)
     @State private var coinPulse: Bool = false
-    
-    
+    @StateObject private var soundFX = SoundEffects.shared
 
 
     var body: some View {
@@ -139,8 +138,13 @@ struct LevelsView: View {
             isInteractable: true,                 // footer is always active on Worlds
             disabledStyle: .standard,
             boostsPanel: { _ in WorldsBoostsPanel() },     // read-only note on this screen
-            walletPanel: { dismiss in WalletPanelView(dismiss: dismiss) }   // 👈 shared
-        )
+            walletPanel: { dismiss in
+                WalletPanelView(
+                    dismiss: dismiss,
+                    showCoinOverlay: .constant(false),  // Levels view doesn't need coin overlay from wallet
+                    pendingRewardCoins: .constant(0)
+                )
+            }        )
         
         .fullScreenCover(isPresented: $showFoodIntro) {
             WorldInstructionGate(
@@ -202,6 +206,7 @@ struct LevelsView: View {
                             if levels.isUnlocked(world) {
                                 // UNLOCKED → centralize navigation through go(to:)
                                 Button {
+                                    soundFX.EnterLevel()
                                     levels.select(world)
                                     go(to: world)    // shows Food gate first time, else navigates
                                 } label: {
@@ -280,11 +285,21 @@ struct LevelsView: View {
     private func buyRevealBoost(cost: Int, count: Int = 1) {
         if levels.coins >= cost {
             levels.addCoins(-cost)
-            boosts.grant(count: count)
+            boosts.grant(count: count, kind: .reveal)   // ← add kind
         } else {
             showInsufficientCoins = true
         }
     }
+
+    private func buyClarityBoost(cost: Int, count: Int = 1) {
+        if levels.coins >= cost {
+            levels.addCoins(-cost)
+            boosts.grant(count: count, kind: .clarity)
+        } else {
+            showInsufficientCoins = true
+        }
+    }
+
 
     private func simulateIAPPurchase(coins: Int) {
         levels.addCoins(coins)
@@ -441,4 +456,8 @@ private struct WorldCard: View {
     }
 }
 
+extension BoostsService {
+    @discardableResult func useReveal()  -> Bool { useOne(kind: .reveal) }
+    @discardableResult func useClarity() -> Bool { useOne(kind: .clarity) }
+}
 
