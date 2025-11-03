@@ -120,7 +120,7 @@ struct LevelPlayView: View {
                             }
                         }
                     )
-                    .scaleEffect(UIDevice.current.userInterfaceIdiom == .phone ? 1.4 : 1.0)
+                    .scaleEffect(UIDevice.current.userInterfaceIdiom == .phone ? 1.4 : 1.2)
                     .contentShape(Rectangle())
                     // Optional: allow tap-to-skip to end
                     // .onTapGesture { finishStopIndex = 1 }

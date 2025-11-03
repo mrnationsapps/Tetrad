@@ -55,7 +55,11 @@ struct ContentView: View {
     @State private var boardGap: CGFloat = 0
     @State private var boardOriginInStage: CGPoint = .zero   // top-left of board in "stage" space
     @State private var ghostSize: CGSize = .init(width: 60, height: 60)
-    @State private var tileScale: CGFloat = 1.0   // 1.0 = natural responsive size
+//    @State private var tileScale: CGFloat = isPad: ? 1.0 : 1.0  // 1.0 = natural responsive size
+
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var tileScale: CGFloat { isPad ? 0.85 : 1.0 }
+
     @State private var bagTileSize: CGFloat = 56   // smaller than the board tiles
     @State private var bagGap: CGFloat = 0         // spacing between bag tiles
     @State private var boardRect: CGRect = .zero
@@ -69,6 +73,7 @@ struct ContentView: View {
     @State private var isDraggingGhost = false
     @State private var ghostTile: LetterTile? = nil
     @State private var ghostStagePoint: CGPoint = .zero   // in "stage" coords
+    
     
 
     // Publish all 16 cell rects (in "stage" space)
@@ -138,10 +143,10 @@ struct ContentView: View {
                 VStack{
                     if let w = resolvedWorld {
                         Text("\(w.name) | L\(levels.levelIndex(for: w) + 1)")
-                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .font(.system(size: isPad ? 30 : 22, weight: .heavy, design: .rounded))
                             .tracking(3)
                             .foregroundColor(.white)
-                            .opacity(0.5)
+                            .opacity(0.8)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     
@@ -149,7 +154,7 @@ struct ContentView: View {
                         .font(.system(size: 22, weight: .heavy, design: .rounded))
                         .tracking(3)
                         .foregroundColor(.white)
-                        .opacity(0.5)
+                        .opacity(0.8)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .offset(x: -2, y: 0)
                     }
@@ -457,6 +462,7 @@ struct ContentView: View {
             // Center the board in all available space
             ZStack { board }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .offset(x: isPad ? 0 : 0, y: isPad ? 35 : -30)
                 .onAppear {
                     if !game.isLevelMode, game.solved {
                         withAnimation(.spring()) { showWinPopup = true }
@@ -533,7 +539,7 @@ struct ContentView: View {
         let isiPad = false
         #endif
 
-        // Bounds for tile edge size
+        // Bounds for letter bag tile size
         let minEdge: CGFloat = 44                 // don’t go too tiny; tweak to taste
         let maxEdge: CGFloat = isiPad ? 80 : 55   // allow bigger tiles on iPad
 
@@ -589,11 +595,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, minHeight: 1)
         }
         .contentShape(Rectangle())
-        .offset(x: 0, y: -30)
+        .offset(x: isPad ? 0 : 0, y: isPad ? 0 : -90)
     }
-
-
-
 
     // Single bag grid cell (square, responsive). Kept small so type-checking is fast.
     @ViewBuilder

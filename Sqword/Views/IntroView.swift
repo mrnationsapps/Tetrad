@@ -6,7 +6,6 @@ struct IntroView: View {
     @EnvironmentObject var levels: LevelsService
     @EnvironmentObject private var music: MusicCenter
 
-
     // Nav
     @State private var navigateToGame = false
     @State private var navigateToLevels = false
@@ -23,7 +22,7 @@ struct IntroView: View {
 
     @StateObject private var soundFX = SoundEffects.shared
 
-
+    
     var body: some View {
         ZStack {
             // ✅ Full-bleed background outside the NavigationStack
@@ -115,7 +114,7 @@ private extension IntroView {
         VStack(spacing: 8) {
             ZStack {
                 Text("SQWORD")
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 50 : 30, weight: .heavy, design: .rounded))
                     .tracking(3)
                     .foregroundColor(.white)
                     .opacity(0.5)

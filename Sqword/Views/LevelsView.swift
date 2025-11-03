@@ -36,7 +36,9 @@ struct LevelsView: View {
     @GestureState private var walletDrag: CGFloat = 0    // live drag delta (+down, −up)
     @State private var coinPulse: Bool = false
     @StateObject private var soundFX = SoundEffects.shared
-
+    
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    
 
     var body: some View {
 
@@ -62,7 +64,7 @@ struct LevelsView: View {
                     Spacer()
 
                     Text("SQWORD")
-                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        .font(.system(size: isPad ? 50 : 30, weight: .heavy, design: .rounded))
                         .tracking(3)
                         .foregroundColor(.white)
                         .opacity(0.5)
@@ -70,7 +72,7 @@ struct LevelsView: View {
                         .padding(.top, 44)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .offset(x: -45, y: 0)
+                        .offset(x: isPad ? -150 : -45, y: isPad ? -30 : 0)
 
                     Color.clear.frame(width: 60)
                 }
@@ -82,7 +84,7 @@ struct LevelsView: View {
 //                Color.clear.frame(width: 0)
             }
             worldList
-                .padding(.top, 60)   // moves it down 60pt within the ZStack
+                .padding(.top, isPad ? 100 : 60)
 
             }
                 .background {
@@ -130,7 +132,6 @@ struct LevelsView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { coinPulse = false }
         }
 
-//        .onAppear { music.enterMenu() }
         
         .withFooterPanels(
             coins: levels.coins,

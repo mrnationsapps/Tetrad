@@ -135,7 +135,7 @@ public struct FooterPanelsModifier<BoostsContent: View, WalletContent: View>: Vi
             }
 
             // Footer bar (drives the toggles)
-            .safeAreaInset(edge: .bottom) {
+            .overlay(alignment: .bottom) {
                 Footer(
                     coins: coins,
                     boostsAvailable: boostsAvailable,

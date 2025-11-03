@@ -56,6 +56,8 @@ struct TutorialWorldView: View {
     @State private var isContinueDisabled = false
 
     private let kTutorialCompleted = "ach.tutorial.completed"
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
 
     private var l1StepContent: (index: Int, text: String)? {
         guard step == .level1 else { return nil }
@@ -107,16 +109,16 @@ struct TutorialWorldView: View {
                     
                     Spacer()
 
-                    Text("SQWORD")
-                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    Text("TUTORIAL")
+                        .font(.system(size: isPad ? 50 : 24, weight: .heavy, design: .rounded))
                         .tracking(3)
                         .foregroundColor(.white)
                         .opacity(0.5)
                         .safeAreaPadding(.top)
-                        .padding(.top, 44)
+                        .padding(.top, isPad ? 44 : 44)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .frame(maxWidth: .infinity, alignment: .center)
-                        .offset(x: -48, y: 0)
+                        .offset(x: isPad ? -150 : -48, y: isPad ? -30 : 0)
 
                     Color.clear.frame(width: 60)
                 }
@@ -225,28 +227,40 @@ struct TutorialWorldView: View {
                         Spacer()
                         CalloutCard {
                             numberedStep(stepLine.index, stepLine.text)
+                                .font(.system(size: isPad ? 40 : 22, weight: .heavy, design: .rounded))
+                                .tracking(2)
+                                .foregroundColor(.white)
+                                .opacity(0.8)
+                                .offset(x: isPad ? 0 : 0, y: isPad ? 120 : -30)
+
                         }
-                        .frame(maxWidth: 520)
+//                        .frame(maxWidth: 520)
                         Spacer()
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 120)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, isPad ? 320 : 120)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if step == .level2 {
                     HStack {
                         Spacer()
                         CalloutCard {
-                            Text("Now try a 3×3, same rules.\nBoosts are available anytime, but are limited in the real game.")
+                            Text("Now a 3×3, same rules.\nBoosts are unlimited, but are limited in the real game.")
                                 .multilineTextAlignment(.center)
-                                .foregroundStyle(.white.opacity(0.92))
+                                .font(.system(size: isPad ? 40 : 22, weight: .heavy, design: .rounded))
+                                .tracking(2)
+                                .foregroundColor(.white)
+                                .opacity(0.8)
                                 .frame(maxWidth: .infinity, alignment: .center)
+                                .offset(x: isPad ? 0 : 0, y: isPad ? 90 : 25)
+                            
+                                
                         }
                         .frame(maxWidth: 520)
                         Spacer()
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 120)
+                    .padding(.bottom, isPad ? 320 : 220)
                     .allowsHitTesting(false)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .offset(y: 80)
@@ -261,30 +275,6 @@ struct TutorialWorldView: View {
                 tutorialAllowsBoosts = (newStep == .promptBoost)
             }
         }
-
-        
-        
-        
-        
-//        // Top toolbar
-//        .toolbar {
-//            ToolbarItem(placement: .navigationBarLeading) {
-//                Button {
-//                    dismiss()
-//                } label: {
-//                    HStack(spacing: 6) {
-//                        Image(systemName: "chevron.left").imageScale(.medium)
-//                        Text("Back")
-//                    }
-//                }
-//                .buttonStyle(SoftRaisedPillStyle(height: 36))
-//            }
-//            ToolbarItem(placement: .principal) {
-//                Text("TUTORIAL")
-//                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-//                    .tracking(1.5)
-//            }
-//        }
 
         // Footer panels
         .withFooterPanels(
@@ -374,12 +364,12 @@ struct TutorialWorldView: View {
 private func numberedStep(_ n: Int, _ text: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(text)
-            .foregroundStyle(.white.opacity(0.92))
+//            .foregroundStyle(.white.opacity(0.92))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
             .padding(10)
             .multilineTextAlignment(.center)
-            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
+//            .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
     }
 }
 
@@ -387,17 +377,8 @@ private struct CalloutCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content
-//            .padding(.vertical, 10)
-//            .background(
-//                RoundedRectangle(cornerRadius: 12)
-//                    .fill(Color.softSage.opacity(1.0))
-//            )
-//            .overlay(
-//                RoundedRectangle(cornerRadius: 12)
-//                    .stroke(.white, lineWidth: 1)
-//            )
-            .shadow(radius: 6, x: 0, y: 2)
-            .padding(.horizontal, 20)
+//            .shadow(radius: 6, x: 0, y: 2)
+            .padding(.horizontal, 10)
             .offset(y: 20)
     }
 }
@@ -468,7 +449,7 @@ private struct StaticSquare3x3: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+//        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 

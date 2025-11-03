@@ -62,6 +62,8 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 	@State private var didFireSecondPlacement = false
     @Environment(\.dismiss) private var dismiss
 
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
 
 	// MARK: - L1 one-step-at-a-time instructions
 
@@ -138,8 +140,11 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 					Spacer()
 					//Text("Moves: \(model.moves)    Streak: \(streak)")
 					Text("Moves: \(model.moves)")
+                        .font(.system(size: isPad ? 22 : 22, weight: .heavy, design: .rounded))
+                        .tracking(2)
                         .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
+                        .opacity(0.8)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
 				}
                 
 				.padding(.horizontal, horizontalPadding)
@@ -215,6 +220,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 								)
 							}
 							.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .padding(.top, isPad ? 150 : 0)
 
 						// Caller overlay drawn over the board zone
 						overlay
@@ -232,18 +238,21 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 				// LETTER BAG
 				VStack(alignment: .leading, spacing: 8) {
                     Text("Letter Bag")
+                        .font(.system(size: isPad ? 22 : 22, weight: .heavy, design: .rounded))
+                        .tracking(2)
                         .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 0)
+                        .opacity(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
 					// --- Wrapping grid (replaces HStack) ---
-					let tileSide: CGFloat = 42
-					let tileSpacing: CGFloat = 6
+                    let tileSide: CGFloat = isPad ? 80 : 42
+                    let tileSpacing: CGFloat = 6
 					let cols = [GridItem(.adaptive(minimum: tileSide, maximum: tileSide), spacing: tileSpacing)]
 
 					LazyVGrid(columns: cols, alignment: .leading, spacing: tileSpacing) {
 						ForEach(Array(model.bag.enumerated()), id: \.offset) { _, ch in
 							Text(String(ch))
-								.font(.system(size: 20, weight: .heavy))
+								.font(.system(size: isPad ? 40 : 20, weight: .heavy))
 								.frame(width: tileSide, height: tileSide)
 								.background(
 									RoundedRectangle(cornerRadius: 8)
@@ -356,7 +365,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
                 Spacer()
 
                 Text("TUTORIAL")
-                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .font(.system(size: isPad ? 50 : 24, weight: .heavy, design: .rounded))
                     .tracking(3)
                     .foregroundColor(.white)
                     .opacity(0.5)
@@ -364,7 +373,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
                     .padding(.top, 44)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(x: -45, y: 0)
+                    .offset(x: isPad ? -150 : -45, y: isPad ? -30 : 0)
 
                 Color.clear.frame(width: 60)
             }
