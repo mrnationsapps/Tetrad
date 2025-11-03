@@ -380,6 +380,7 @@ struct ContentView: View {
                 #if os(iOS)
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 #endif
+                dismiss()
             } else {
                 errorText = "Nothing to highlight right now."
             }

@@ -94,11 +94,19 @@ struct BoostCenterView: View {
     }
     
     private func useClarityBoost() {
-        // spend CLARITY
+        // Check if in level mode (World levels only)
+        guard game.isLevelMode else {
+            errorText = "Clarity only works in World levels."
+            return
+        }
+        
+        // Check if boosts available
         guard boosts.count(for: .clarity) > 0 else {
             errorText = "No Clarity boosts left."
             return
         }
+        
+        // Apply the boost
         if game.applyClarityBoost() {
             _ = boosts.useOne(kind: .clarity)
             #if os(iOS)
