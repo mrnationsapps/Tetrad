@@ -26,7 +26,7 @@ final class AudioManager {
         if let p = player, p.isPlaying { return }
 
         guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
-            print("⚠️ AudioManager: Missing resource \(name).\(ext)")
+//            print("⚠️ AudioManager: Missing resource \(name).\(ext)")
             return
         }
 
@@ -42,7 +42,7 @@ final class AudioManager {
             p.play()
             player = p
         } catch {
-            print("⚠️ AudioManager: failed to play \(name).\(ext):", error)
+//            print("⚠️ AudioManager: failed to play \(name).\(ext):", error)
         }
     }
 

@@ -55,7 +55,7 @@ final class BoostsService: ObservableObject {
         persist()
 
         #if DEBUG
-        print("🟣 BoostsService init → purch=\(purchased) reveal=\(revealRemaining) clarity=\(clarityRemaining)")
+//        print("🟣 BoostsService init → purch=\(purchased) reveal=\(revealRemaining) clarity=\(clarityRemaining)")
         #endif
     }
 

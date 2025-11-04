@@ -376,7 +376,7 @@ struct LevelPlayView: View {
         par      = levels.levelPar(for: world, levelIndex: idx)
         let seed = levels.seed(for: world, levelIndex: idx)
 
-        print("▶️ Level entry — world=\(world.id) idx=\(idx) seed=\(seed)")
+//        print("▶️ Level entry — world=\(world.id) idx=\(idx) seed=\(seed)")
 
         // 🔑 Tell GameState which slot to use for this world+level
         game.levelSlotKey = RunKey.level(worldID: world.id, levelIndex: idx, seed: seed)

@@ -345,25 +345,27 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 					.transition(.opacity)
 			}
             
-            HStack{
-
-                Button { dismiss() }
-                label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.left").imageScale(.medium)
+            ZStack {
+                // Back button anchored to leading edge
+                HStack {
+                    Button { dismiss() }
+                    label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left").imageScale(.medium)
+                        }
+                        .foregroundStyle(.primary)
                     }
-                    .foregroundStyle(.primary)
+                    .buttonStyle(SoftRaisedPillStyle(height: 40))
+                    .opacity(0.5)
+                    .frame(width: 60)
+                    .safeAreaPadding(.top)
+                    .padding(.top, 40)
+                    .padding(.leading, 16)
+                    
+                    Spacer()
                 }
-                .buttonStyle(SoftRaisedPillStyle(height: 40))
-                .opacity(0.5)
-                .frame(width: 60)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .safeAreaPadding(.top)      // adds the device's top safe area
-                .padding(.top, 40)          // + your extra nudge
-                .padding(.leading, 16)
-                      
-                Spacer()
-
+                
+                // Title centered independently
                 Text("TUTORIAL")
                     .font(.system(size: isPad ? 50 : 24, weight: .heavy, design: .rounded))
                     .tracking(3)
@@ -371,15 +373,11 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
                     .opacity(0.5)
                     .safeAreaPadding(.top)
                     .padding(.top, 44)
-                    .frame(maxHeight: .infinity, alignment: .top)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .offset(x: isPad ? -150 : -45, y: isPad ? -30 : 0)
-
-                Color.clear.frame(width: 60)
             }
+            .frame(maxHeight: .infinity, alignment: .top)
             .ignoresSafeArea(edges: .top)
             .navigationBarBackButtonHidden(true)
-            
 		}
 		// shared coordinate space so bag drag points and board measurement agree
 		.coordinateSpace(name: "stage")
@@ -558,7 +556,7 @@ struct TutorialLevelScreen<BoardOverlay: View>: View {
 
 			guard let (target, source) = emptyPlacements.randomElement() ?? wrongPlacements.randomElement() else {
 				#if DEBUG
-				print("revealOne(): no viable targets with available source")
+//				print("revealOne(): no viable targets with available source")
 				#endif
 				return
 			}

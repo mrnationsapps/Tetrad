@@ -204,7 +204,7 @@ final class GameState: ObservableObject {
     @MainActor
     func bootstrapForToday(date: Date = Date()) {
         let todayKey = currentUTCDateKey(date)
-        NSLog("bootstrapForToday → \(todayKey)")
+//        NSLog("bootstrapForToday → \(todayKey)")
         isLevelMode = false   // explicit daily gate
 
         generateNewDailyIdentity(date: date)
@@ -212,7 +212,7 @@ final class GameState: ObservableObject {
         if let id = identity {
             buildTiles(from: id.bag)
         } else {
-            NSLog("⚠️ bootstrapForToday: identity missing after generation for \(todayKey)")
+//            NSLog("⚠️ bootstrapForToday: identity missing after generation for \(todayKey)")
         }
 
         // Restore Daily snapshot (placements/moves) or start fresh
@@ -340,9 +340,9 @@ final class GameState: ObservableObject {
     // MARK: - Daily “new puzzle”
     @MainActor
     func newDailyPuzzle(date: Date = Date()) {
-        NSLog("🟡 newDailyPuzzle() called for \(currentUTCDateKey(date))")
+//        NSLog("🟡 newDailyPuzzle() called for \(currentUTCDateKey(date))")
         let dict = DictionaryLoader.loadFourLetterWords()
-        NSLog("📚 Sqword dictionary loaded: \(dict.count) words")
+//        NSLog("📚 Sqword dictionary loaded: \(dict.count) words")
         if let id = identity { clearBoostLocks(for: id.dayUTC) }
         Persistence.clearForNewDay()
         generateNewDailyIdentity(date: date)
@@ -416,7 +416,7 @@ final class GameState: ObservableObject {
                 // Insert returns (inserted: Bool, memberAfterInsert: Element)
                 let justLocked = worldLockedTileIDs.insert(t.id).inserted
                 if justLocked {
-                    NSLog("🔒 World-lock at (\(coord.row),\(coord.col)) letter \(t.letter) id=\(t.id)")
+//                    NSLog("🔒 World-lock at (\(coord.row),\(coord.col)) letter \(t.letter) id=\(t.id)")
 
                     // 2s shimmer (one-shot)
                     worldShimmerIDs.insert(t.id)
@@ -614,7 +614,7 @@ final class GameState: ObservableObject {
             
             saveAchievementTotals()
             
-            NSLog("✨ World Word complete: \(worldWord ?? "(unknown)") at index \(worldWordIndex ?? -1)")
+//            NSLog("✨ World Word complete: \(worldWord ?? "(unknown)") at index \(worldWordIndex ?? -1)")
         }
     }
 
@@ -706,17 +706,17 @@ final class GameState: ObservableObject {
             let letters  = foundLetters,
             let wIndex   = theWorldIndex
         else {
-            NSLog("❌ Level start failed; falling back to Daily bootstrap")
+//            NSLog("❌ Level start failed; falling back to Daily bootstrap")
             bootstrapForToday()
             return
         }
 
         if themedSet.isEmpty {
-            NSLog("⚠️ Level start (\(dictionaryID)): themed set is empty; generic square used.")
+//            NSLog("⚠️ Level start (\(dictionaryID)): themed set is empty; generic square used.")
         } else if !usedThemedWord {
-            NSLog("ℹ️ Level start (\(dictionaryID)): no themed word hit after attempts; using fallback square.")
+//            NSLog("ℹ️ Level start (\(dictionaryID)): no themed word hit after attempts; using fallback square.")
         } else {
-            NSLog("✅ Level start (\(dictionaryID)): world word = \(solution[wIndex]) @ index \(wIndex)")
+//            NSLog("✅ Level start (\(dictionaryID)): world word = \(solution[wIndex]) @ index \(wIndex)")
         }
 
         // Record solution + build tiles/bag
@@ -764,7 +764,7 @@ final class GameState: ObservableObject {
 
     func noteBoostPurchased(count: Int = 1) {
         boostsPurchasedTotal += count
-        print("🧮 boostsPurchasedTotal = \(boostsPurchasedTotal) (+\(count))")
+//        print("🧮 boostsPurchasedTotal = \(boostsPurchasedTotal) (+\(count))")
         saveAchievementTotals()
     }
 
@@ -787,35 +787,35 @@ final class GameState: ObservableObject {
     private func restoreLevelSnapshotIfAvailable() -> Bool {
         // Identity must exist
         guard let id = identity else {
-            print("🧪 RESTORE miss — expected=<no identity> found=nil")
+//            print("🧪 RESTORE miss — expected=<no identity> found=nil")
             return false
         }
 
         // Level-mode only
         guard isLevelMode else {
-            print("🧪 RESTORE bypass — not level mode")
+//            print("🧪 RESTORE bypass — not level mode")
             return false
         }
 
         // Need an active level slot key (set by LevelPlayView before starting)
         guard let key = levelSlotKey else {
-            print("🧪 RESTORE miss — no levelSlotKey set")
+//            print("🧪 RESTORE miss — no levelSlotKey set")
             return false
         }
 
         // Load the keyed run
         guard let run = Persistence.loadRunState(forKey: key) else {
-            print("🧪 RESTORE miss — expected=\(key) found=nil")
+//            print("🧪 RESTORE miss — expected=\(key) found=nil")
             return false
         }
 
         // Identity guard
         guard run.lastPlayedDayUTC == id.dayUTC else {
-            print("🧪 RESTORE miss — identity mismatch expected=\(id.dayUTC) found=\(run.lastPlayedDayUTC)")
+//            print("🧪 RESTORE miss — identity mismatch expected=\(id.dayUTC) found=\(run.lastPlayedDayUTC)")
             return false
         }
 
-        print("✅ RESTORE hit — key=\(key) placements=\(run.placements.count) moves=\(run.moves)")
+//        print("✅ RESTORE hit — key=\(key) placements=\(run.placements.count) moves=\(run.moves)")
 
         // Restore counters/flags
         moveCount = run.moves
@@ -874,7 +874,7 @@ final class GameState: ObservableObject {
             }
         }
 
-        print("📦 SAVE — id=\(id.dayUTC) placements=\(placements.count) moves=\(moveCount) solved=\(solved)")
+//        print("📦 SAVE — id=\(id.dayUTC) placements=\(placements.count) moves=\(moveCount) solved=\(solved)")
 
         let run = RunState(
             moves: moveCount,
@@ -973,7 +973,7 @@ extension GameState {
     @MainActor
     func applySmartBoost(movePenalty: Int) -> Bool {
         guard let solution = self.solution, solution.count == 4 else {
-            NSLog("SmartBoost(auto): no solution cached for today")
+//            NSLog("SmartBoost(auto): no solution cached for today")
             return false
         }
 

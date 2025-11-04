@@ -43,9 +43,9 @@ struct LevelsView: View {
     var body: some View {
 
         ZStack(alignment: .topLeading){
-            HStack{
-                HStack{
-                    
+            ZStack {
+                // Back button anchored to leading edge
+                HStack {
                     Button { dismiss() }
                     label: {
                         HStack(spacing: 8) {
@@ -56,33 +56,26 @@ struct LevelsView: View {
                     .buttonStyle(SoftRaisedPillStyle(height: 40))
                     .opacity(0.5)
                     .frame(width: 60)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .safeAreaPadding(.top)      // adds the device's top safe area
-                    .padding(.top, 40)          // + your extra nudge
+                    .safeAreaPadding(.top)
+                    .padding(.top, 40)
                     .padding(.leading, 16)
-                          
+                    
                     Spacer()
-
-                    Text("SQWORD")
-                        .font(.system(size: isPad ? 50 : 30, weight: .heavy, design: .rounded))
-                        .tracking(3)
-                        .foregroundColor(.white)
-                        .opacity(0.5)
-                        .safeAreaPadding(.top)
-                        .padding(.top, 44)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .offset(x: isPad ? -150 : -45, y: isPad ? -30 : 0)
-
-                    Color.clear.frame(width: 60)
                 }
-                .ignoresSafeArea(edges: .top)
-                .navigationBarBackButtonHidden(true)
-
-                Spacer()
                 
-//                Color.clear.frame(width: 0)
+                // Title centered independently
+                Text("SQWORD")
+                    .font(.system(size: isPad ? 50 : 30, weight: .heavy, design: .rounded))
+                    .tracking(3)
+                    .foregroundColor(.white)
+                    .opacity(0.5)
+                    .safeAreaPadding(.top)
+                    .padding(.top, 44)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea(edges: .top)
+            .navigationBarBackButtonHidden(true)
             worldList
                 .padding(.top, isPad ? 100 : 60)
 
@@ -182,7 +175,7 @@ struct LevelsView: View {
                 .padding(.horizontal, 20)
                 .onTapGesture(count: 3) {
                     UserDefaults.standard.set(false, forKey: "intro.food.seen")
-                    print("👀 Reset intro.food.seen → false")
+//                    print("👀 Reset intro.food.seen → false")
                 }
 
             GeometryReader { geo in

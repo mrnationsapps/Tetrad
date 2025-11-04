@@ -40,7 +40,7 @@ final class SoundEffects: ObservableObject {
             try AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("⚠️ SoundEffects: Failed to configure audio session: \(error)")
+//            print("⚠️ SoundEffects: Failed to configure audio session: \(error)")
         }
     }
     
@@ -56,7 +56,7 @@ final class SoundEffects: ObservableObject {
         } else {
             // Create new player for this sound
             guard let url = Bundle.main.url(forResource: soundName, withExtension: nil) else {
-                print("⚠️ Sound file not found: \(soundName)")
+//                print("⚠️ Sound file not found: \(soundName)")
                 return
             }
             
@@ -67,7 +67,7 @@ final class SoundEffects: ObservableObject {
                 players[soundName] = player
                 player.play()
             } catch {
-                print("⚠️ Failed to play sound \(soundName): \(error)")
+//                print("⚠️ Failed to play sound \(soundName): \(error)")
             }
         }
     }

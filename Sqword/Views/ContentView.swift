@@ -110,8 +110,13 @@ struct ContentView: View {
     
     // TESTING HELPERS
     private var effectiveBoostsRemaining: Int {
-        boosts.remaining + max(0, debug.boostTest)
+    #if DEBUG
+        return boosts.remaining + max(0, debug.boostTest)
+    #else
+        return boosts.remaining
+    #endif
     }
+    
     private var canUseBoost: Bool {
         effectiveBoostsRemaining > 0
     }
@@ -261,20 +266,35 @@ struct ContentView: View {
         // Daily bootstrap stays gated by skipDailyBootstrap
         .onAppear {
             guard !skipDailyBootstrap else { return }
-            let offsetDate = Calendar(identifier: .gregorian).date(
-                byAdding: .day, value: debug.boardTest, to: Date()
-            ) ?? Date()
+
+            #if DEBUG
+            let days = debug.boardTest
+            #else
+            let days = 0
+            #endif
+
+            let offsetDate = Calendar(identifier: .gregorian)
+                .date(byAdding: .day, value: days, to: Date()) ?? Date()
+
             game.bootstrapForToday(date: offsetDate)
         }
+
         .onChange(of: scenePhase) { _, newPhase in
             guard !skipDailyBootstrap else { return }
             if newPhase == .active {
-                let offsetDate = Calendar(identifier: .gregorian).date(
-                    byAdding: .day, value: debug.boardTest, to: Date()
-                ) ?? Date()
+                #if DEBUG
+                let days = debug.boardTest
+                #else
+                let days = 0
+                #endif
+
+                let offsetDate = Calendar(identifier: .gregorian)
+                    .date(byAdding: .day, value: days, to: Date()) ?? Date()
+
                 game.bootstrapForToday(date: offsetDate)
             }
         }
+
 
         // Only trigger Daily win popup when enabled
         .onChange(of: game.solved) { _, isSolved in

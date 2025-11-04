@@ -67,7 +67,7 @@ final class MusicCenter: ObservableObject {
     // MARK: - Logging helper
     private func log(_ msg: String) {
         #if DEBUG
-        print("[Music] \(msg)  (lastCaller: \(lastCaller))")
+//        print("[Music] \(msg)  (lastCaller: \(lastCaller))")
         #endif
     }
 }

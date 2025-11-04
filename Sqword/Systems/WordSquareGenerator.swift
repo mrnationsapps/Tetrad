@@ -51,7 +51,7 @@ final class WordSquareGenerator {
 
             // Stop if we ran out of budget
             if DispatchTime.now().uptimeNanoseconds > deadline {
-                NSLog("⏱️ WordSquare: budget \(timeBudgetMillis)ms exhausted after \(attempt) starts; no puzzle.")
+//                NSLog("⏱️ WordSquare: budget \(timeBudgetMillis)ms exhausted after \(attempt) starts; no puzzle.")
                 return nil
             }
 
@@ -68,8 +68,8 @@ final class WordSquareGenerator {
                         .map { c in String(rowsArr.map { $0[c] }) }
                         .joined(separator: " | ")
 
-                    NSLog("🧩 Puzzle solution ROWS: \(rowsText)")
-                    NSLog("🧩 Puzzle solution COLS: \(colsText)")
+//                    NSLog("🧩 Puzzle solution ROWS: \(rowsText)")
+//                    NSLog("🧩 Puzzle solution COLS: \(colsText)")
 
                     let bagKey = String(bag.sorted())
                     if seenBags.insert(bagKey).inserted {
@@ -77,13 +77,13 @@ final class WordSquareGenerator {
                     }
                 } else {
                     // Optional: log that a non-unique bag was rejected
-                    NSLog("🚫 Rejected bag (not unique). Start word: \(w)")
+//                    NSLog("🚫 Rejected bag (not unique). Start word: \(w)")
                 }
             }
 
 
             if attempt >= maxRetries {
-                NSLog("⚠️ WordSquare: reached maxRetries=\(maxRetries) without a result.")
+//                NSLog("⚠️ WordSquare: reached maxRetries=\(maxRetries) without a result.")
                 break
             }
         }
