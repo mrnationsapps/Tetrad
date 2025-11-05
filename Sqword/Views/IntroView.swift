@@ -1,4 +1,5 @@
 import SwiftUI
+import Lottie 
 
 struct IntroView: View {
     // Env
@@ -21,6 +22,16 @@ struct IntroView: View {
     @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
 
     @StateObject private var soundFX = SoundEffects.shared
+    
+    // Tutorial helpers
+    @AppStorage("helper.settings.seen") private var settingsHelperSeen: Bool = false
+    @AppStorage("helper.achievements.seen") private var achievementsHelperSeen: Bool = false
+    @AppStorage("helper.play.seen") private var playHelperSeen: Bool = false
+    @State private var showAchievementsHelper = false
+    @State private var showSettingsHelper = true
+    @State private var settingsButtonFrame: CGRect = .zero
+    @State private var showPlayHelper = false
+    @State private var playButtonFrame: CGRect = .zero
 
     
     var body: some View {
@@ -28,7 +39,7 @@ struct IntroView: View {
             // ✅ Full-bleed background outside the NavigationStack
             NavigationStack {
                 ZStack {
-                    // (No background color here — keep it transparent)
+                    // (No background color here – keep it transparent)
                     VStack(spacing: 20) {
                         header
                         achievementsSection
@@ -36,6 +47,21 @@ struct IntroView: View {
 
                     // Lottie coin overlay
                     rewardOverlayLayer
+                    
+                    // Settings helper overlay
+                    if showSettingsHelper && !settingsHelperSeen {
+                        settingsHelperOverlay
+                    }
+                    
+                    // Achievements helper overlay
+                    if showAchievementsHelper && !achievementsHelperSeen {
+                        achievementsHelperOverlay
+                    }
+                    
+                    // Play helper overlay
+                    if showPlayHelper && !playHelperSeen {
+                        playHelperOverlay
+                    }
                 }
                 .padding(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
                 .safeAreaInset(edge: .bottom) { bottomCTA }
@@ -102,6 +128,15 @@ struct IntroView: View {
             achievements = Achievement.all
         }
         .settingsOverlay(isPresented: $showSettings)
+        .onPreferenceChange(SettingsButtonPositionKey.self) { frame in
+            settingsButtonFrame = frame
+        }
+        
+        .onChange(of: showSettings) { newValue in
+            if !newValue && !achievementsHelperSeen {  // Settings just closed
+                showAchievementsHelper = true
+            }
+        }
 
     }
 
@@ -123,7 +158,11 @@ private extension IntroView {
                 HStack {
                     Spacer()
                     Button {
-                        withAnimation(.spring()) { showSettings = true }
+                        withAnimation(.spring()) {
+                            showSettings = true
+                            showSettingsHelper = false
+                            settingsHelperSeen = true
+                        }
                     } label: {
                         Image(systemName: "gearshape").imageScale(.medium)
                     }
@@ -133,6 +172,17 @@ private extension IntroView {
                     .frame(width: 60)
                     .padding(.trailing, 10)
                     .offset(y: -20)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear {
+                                    settingsButtonFrame = geo.frame(in: .global)
+                                }
+                                .onChange(of: geo.frame(in: .global)) { newFrame in
+                                    settingsButtonFrame = newFrame
+                                }
+                        }
+                    )
                 }
 
             }
@@ -174,6 +224,19 @@ private extension IntroView {
                         )
                         .environmentObject(levels)
                         .environmentObject(game)
+                        .onAppear {
+                            // Hide achievements helper and show play helper
+                            if showAchievementsHelper {
+                                showAchievementsHelper = false
+                                achievementsHelperSeen = true
+                                // Show play helper after a brief delay
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    if !playHelperSeen {
+                                        showPlayHelper = true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.bottom, 12)
@@ -186,15 +249,16 @@ private extension IntroView {
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxHeight: .infinity, alignment: .top)
-        }
-        .padding(.horizontal)
-    }
+            }
+            .padding(.horizontal)    }
 
     var bottomCTA: some View {
         VStack(spacing: 12) {
             Button {
                 soundFX.playButton()
                 navigateToLevels = true
+                showPlayHelper = false  // Hide helper
+                playHelperSeen = true   // Never show again
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gamecontroller").imageScale(.medium)
@@ -204,7 +268,18 @@ private extension IntroView {
                 .foregroundStyle(.primary)
             }
             .buttonStyle(SoftRaisedPillStyle(height: 52))
-
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear {
+                            playButtonFrame = geo.frame(in: .global)
+                        }
+                        .onChange(of: geo.frame(in: .global)) { newFrame in
+                            playButtonFrame = newFrame
+                        }
+                }
+            )
+            
             if tutorialCompleted {
                 Button {
                     soundFX.playButton()
@@ -240,8 +315,69 @@ private extension IntroView {
         }
     }
 
+    // Helper Lottie vars /////////
+    
+    @ViewBuilder
+    var playHelperOverlay: some View {
+        if playButtonFrame != .zero {
+            LottieView(
+                name: "Play_lottie",
+                loop: .loop,
+                speed: 1.0
+            )
+            .scaleEffect(0.4)
+//            .frame(width: 120, height: 120)
+            .position(
+                x: playButtonFrame.midX + 50,
+                y: playButtonFrame.midY - 180
+            )
+            .allowsHitTesting(false)
+            .zIndex(100)
+        }
+    }
+    
+    @ViewBuilder
+    var settingsHelperOverlay: some View {
+        LottieView(
+            name: "Settings_lottie",
+            loop: .loop
+        )
+        .scaleEffect(0.3)
+        .position(
+            x: settingsButtonFrame.maxX - 180,
+            y: settingsButtonFrame.minY + 90
+        )
+        .allowsHitTesting(false)
+        .zIndex(100)
+    }
+    
+    @ViewBuilder
+    var achievementsHelperOverlay: some View {
+        LottieView(
+            name: "Achievements_lottie",
+            loop: .loop,
+            speed: 1.0
+        )
+        .scaleEffect(0.5)
+//        .frame(width: 120, height: 120)
+        .position(
+            x: UIScreen.main.bounds.width - 200,  // Screen right
+            y: UIScreen.main.bounds.height / 2    // Vertically centered
+        )
+        .allowsHitTesting(false)
+        .zIndex(100)
+    }
+
     func unlockedCount() -> Int {
         achievements.filter { $0.isUnlocked(using: game) }.count
+    }
+}
+
+// MARK: - Preference Key
+struct SettingsButtonPositionKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
 
@@ -349,5 +485,12 @@ struct AchievementRow: View {
         }
         .padding(10)
         .contentShape(Rectangle())
+    }
+}
+
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
