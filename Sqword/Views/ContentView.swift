@@ -74,7 +74,9 @@ struct ContentView: View {
     @State private var ghostTile: LetterTile? = nil
     @State private var ghostStagePoint: CGPoint = .zero   // in "stage" coords
     
-    
+    // lottie Helpers
+    @AppStorage("helper.tapWallet.seen") private var tapWalletHelperSeen: Bool = false
+    @State private var showTapWalletHelper = false
 
     // Publish all 16 cell rects (in "stage" space)
     private struct CellRectsKey: PreferenceKey {
@@ -249,6 +251,22 @@ struct ContentView: View {
                 .transition(.scale.combined(with: .opacity))
             }
             
+            // TapWallet helper overlay - ADD THIS HERE
+            if showTapWalletHelper && !tapWalletHelperSeen {
+                LottieView(
+                    name: "TapWallet_lottie",
+                    loop: .loop,
+                    speed: 1.0
+                )
+                .scaleEffect(1.0)
+                .frame(width: 120, height: 120)
+                .position(
+                    x: UIScreen.main.bounds.width * 0.48,
+                    y: UIScreen.main.bounds.height - (isPad ? 350 : 400)
+                )
+                .allowsHitTesting(false)
+                .zIndex(100)
+            }
         }
 
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost
@@ -315,6 +333,7 @@ struct ContentView: View {
             coins: levels.coins,
             boostsAvailable: boosts.remaining,
             isInteractable: true,
+            isGameBoard: true,
             disabledStyle: .standard,
             boostsPanel: { dismiss in
                 DailyBoostsPanel(
@@ -328,7 +347,18 @@ struct ContentView: View {
                     showCoinOverlay: .constant(false),  // Daily mode doesn't need coin overlay from wallet
                     pendingRewardCoins: .constant(0)
                 )
-            }        )
+            }
+        )
+        
+        .onAppear {
+            // Check if wallet should be pulsing
+            let hasUnclaimed = !Achievement.unclaimed(using: game).isEmpty
+            if hasUnclaimed && levels.hasUnlockedNonTutorial && !tapWalletHelperSeen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    showTapWalletHelper = true
+                }
+            }
+        }
     }
 
 

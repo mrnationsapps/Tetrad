@@ -22,7 +22,8 @@ struct IntroView: View {
     @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
 
     @StateObject private var soundFX = SoundEffects.shared
-    
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
     // Tutorial helpers
     @AppStorage("helper.settings.seen") private var settingsHelperSeen: Bool = false
     @AppStorage("helper.achievements.seen") private var achievementsHelperSeen: Bool = false
@@ -344,8 +345,9 @@ private extension IntroView {
         )
         .scaleEffect(0.3)
         .position(
-            x: settingsButtonFrame.maxX - 180,
-            y: settingsButtonFrame.minY + 90
+            x: settingsButtonFrame.maxX  - (isPad ? 180 : 140),
+            y: settingsButtonFrame.minY + (isPad ? 90 : 0)
+//            y: settingsButtonFrame.minY + 90
         )
         .allowsHitTesting(false)
         .zIndex(100)
@@ -361,7 +363,7 @@ private extension IntroView {
         .scaleEffect(0.5)
 //        .frame(width: 120, height: 120)
         .position(
-            x: UIScreen.main.bounds.width - 200,  // Screen right
+            x: UIScreen.main.bounds.width - (isPad ? 200 : 130),  // Screen right
             y: UIScreen.main.bounds.height / 2    // Vertically centered
         )
         .allowsHitTesting(false)

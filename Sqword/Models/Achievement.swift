@@ -66,7 +66,7 @@ extension Achievement {
             key: "unlock_second_world",
             title: "Steppin' Out",
             subtitle: "Unlock two Worlds.",
-            rewardCoins: 20,
+            rewardCoins: 5,
             condition: { $0.worldsUnlockedCount >= 2 }
         ),
 
@@ -74,7 +74,7 @@ extension Achievement {
             key: "unlock_third_world",
             title: "Explorer",
             subtitle: "Unlock three Worlds.",
-            rewardCoins: 20,
+            rewardCoins: 10,
             condition: { $0.worldsUnlockedCount >= 3 }
         ),
         
@@ -82,7 +82,7 @@ extension Achievement {
             key: "unlock_forth_world",
             title: "World Traveler",
             subtitle: "Unlock four Worlds.",
-            rewardCoins: 25,
+            rewardCoins: 10,
             condition: { $0.worldsUnlockedCount >= 4 }
         ),
     
@@ -90,7 +90,7 @@ extension Achievement {
             key: "unlock_fifth_world",
             title: "Magellan",
             subtitle: "Unlock five Worlds.",
-            rewardCoins: 40,
+            rewardCoins: 10,
             condition: { $0.worldsUnlockedCount >= 5 }
         ),
     
@@ -98,7 +98,7 @@ extension Achievement {
             key: "unlock_sixth_world",
             title: "Globe Trotter",
             subtitle: "Unlock six Worlds.",
-            rewardCoins: 45,
+            rewardCoins: 10,
             condition: { $0.worldsUnlockedCount >= 6 }
         ),
         
@@ -106,7 +106,7 @@ extension Achievement {
             key: "five_levels",
             title: "Just Getting Started",
             subtitle: "Solve 5 Levels.",
-            rewardCoins: 15,
+            rewardCoins: 10,
             condition: { $0.totalLevelsSolved >= 5 }
         ),
 
@@ -114,7 +114,7 @@ extension Achievement {
             key: "five_boosts",
             title: "A Little Help",
             subtitle: "Buy 3 Boosts.",
-            rewardCoins: 10,
+            rewardCoins: 5,
             condition: { $0.boostsPurchasedTotal >= 5 }
         ),
 
@@ -130,7 +130,7 @@ extension Achievement {
             key: "streak_3_daily",
             title: "On a Roll",
             subtitle: "3-day Daily streak.",
-            rewardCoins: 15,
+            rewardCoins: 10,
             condition: { $0.streak >= 3 }
         ),
 
@@ -138,7 +138,7 @@ extension Achievement {
             key: "streak_7_daily",
             title: "Hot Streak",
             subtitle: "7-day Daily streak.",
-            rewardCoins: 45,
+            rewardCoins: 15,
             condition: { $0.streak >= 7 }
         ),
         
@@ -171,7 +171,7 @@ extension Achievement {
             key: "efficient_10",
             title: "Efficient Thinker",
             subtitle: "Solve in 10 moves or fewer.",
-            rewardCoins: 30,
+            rewardCoins: 10,
             // Mode-agnostic, persists once earned
             condition: { _ in
                 UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_10")
@@ -182,7 +182,7 @@ extension Achievement {
             key: "perfect_fill",
             title: "Perfect Fill",
             subtitle: "Finish with no boosts.",
-            rewardCoins: 20,
+            rewardCoins: 10,
             // Mode-agnostic, persists once earned
             condition: { _ in
                 UserDefaults.standard.bool(forKey: "ach.unlocked.perfect_fill")
@@ -193,7 +193,7 @@ extension Achievement {
                 key: "complete_food_world",
                 title: "Culinary Expert",
                 subtitle: "Complete all Food World levels.",
-                rewardCoins: 50,
+                rewardCoins: 10,
                 condition: { _ in
                     UserDefaults.standard.bool(forKey: "world.food.completed")
                 }
@@ -203,7 +203,7 @@ extension Achievement {
                 key: "ten_world_words",
                 title: "Word Hunter",
                 subtitle: "Find 10 World Words.",
-                rewardCoins: 40,
+                rewardCoins: 10,
                 condition: { _ in
                     UserDefaults.standard.integer(forKey: "stats.worldWordsFound") >= 10
                 }
@@ -213,7 +213,7 @@ extension Achievement {
                 key: "ten_boosts",
                 title: "Power User",
                 subtitle: "Buy 10 Boosts.",
-                rewardCoins: 20,
+                rewardCoins: 10,
                 condition: { $0.boostsPurchasedTotal >= 10 }
             ),
 
@@ -221,7 +221,7 @@ extension Achievement {
                 key: "fifty_boosts",
                 title: "Boost Enthusiast",
                 subtitle: "Buy 50 Boosts.",
-                rewardCoins: 40,
+                rewardCoins: 15,
                 condition: { $0.boostsPurchasedTotal >= 50 }
             ),
 
@@ -229,7 +229,7 @@ extension Achievement {
                 key: "coin_collector",
                 title: "Coin Collector",
                 subtitle: "Accumulate 150 coins.",
-                rewardCoins: 20,
+                rewardCoins: 10,
                 condition: { _ in
                     // You'd need to track total coins earned in GameState
                     UserDefaults.standard.integer(forKey: "stats.totalCoinsEarned") >= 150
@@ -240,7 +240,7 @@ extension Achievement {
                 key: "streak_14_daily",
                 title: "Two Week Warrior",
                 subtitle: "14-day Daily streak.",
-                rewardCoins: 40,
+                rewardCoins: 20,
                 condition: { $0.streak >= 14 }
             ),
 
@@ -248,7 +248,7 @@ extension Achievement {
                 key: "streak_30_daily",
                 title: "Monthly Master",
                 subtitle: "30-day Daily streak.",
-                rewardCoins: 50,
+                rewardCoins: 20,
                 condition: { $0.streak >= 30 }
             ),
 
@@ -256,7 +256,7 @@ extension Achievement {
                 key: "streak_100_daily",
                 title: "Dedication Incarnate",
                 subtitle: "100-day Daily streak.",
-                rewardCoins: 60,
+                rewardCoins: 20,
                 condition: { $0.streak >= 100 }
             ),
         
@@ -264,7 +264,7 @@ extension Achievement {
                 key: "ten_levels",
                 title: "Warming Up",
                 subtitle: "Solve 10 Levels.",
-                rewardCoins: 30,
+                rewardCoins: 10,
                 condition: { $0.totalLevelsSolved >= 10 }
             ),
 
@@ -272,7 +272,7 @@ extension Achievement {
                 key: "twenty_five_levels",
                 title: "Committed Player",
                 subtitle: "Solve 25 Levels.",
-                rewardCoins: 40,
+                rewardCoins: 10,
                 condition: { $0.totalLevelsSolved >= 25 }
             ),
 
@@ -280,7 +280,7 @@ extension Achievement {
                 key: "fifty_levels",
                 title: "Half Century",
                 subtitle: "Solve 50 Levels.",
-                rewardCoins: 50,
+                rewardCoins: 10,
                 condition: { $0.totalLevelsSolved >= 50 }
             ),
 
@@ -288,7 +288,7 @@ extension Achievement {
                 key: "hundred_levels",
                 title: "Century Club",
                 subtitle: "Solve 100 Levels.",
-                rewardCoins: 60,
+                rewardCoins: 10,
                 condition: { $0.totalLevelsSolved >= 100 }
             ),
         
@@ -296,7 +296,7 @@ extension Achievement {
                 key: "efficient_5",
                 title: "Speed Demon",
                 subtitle: "Solve in 5 moves or fewer.",
-                rewardCoins: 40,
+                rewardCoins: 10,
                 condition: { _ in
                     UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_5")
                 }
@@ -306,7 +306,7 @@ extension Achievement {
                 key: "efficient_15",
                 title: "Getting the Hang of It",
                 subtitle: "Solve in 15 moves or fewer.",
-                rewardCoins: 20,
+                rewardCoins: 10,
                 condition: { _ in
                     UserDefaults.standard.bool(forKey: "ach.unlocked.efficient_15")
                 }
@@ -316,7 +316,7 @@ extension Achievement {
                 key: "world_word_speedrun",
                 title: "Quick Study",
                 subtitle: "Find a World Word in under 5 moves.",
-                rewardCoins: 20,
+                rewardCoins: 10,
                 condition: { _ in
                     UserDefaults.standard.bool(forKey: "ach.unlocked.world_word_speedrun")
                 }
@@ -326,7 +326,7 @@ extension Achievement {
             key: "daily_return",
             title: "Daily Again? Heck yes.",
             subtitle: "Solve two dailies in a row.",
-            rewardCoins: 15,
+            rewardCoins: 10,
             condition: { $0.streak >= 2 }
         )
     ]

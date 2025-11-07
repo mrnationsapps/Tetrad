@@ -39,6 +39,15 @@ struct LevelsView: View {
     
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     
+    // Lottie Helpers
+    @AppStorage("helper.worldsScroll.seen") private var worldsScrollHelperSeen: Bool = false
+    @AppStorage("helper.buyWorld.seen") private var buyWorldHelperSeen: Bool = false
+    @AppStorage("helper.doTutorial.seen") private var doTutorialHelperSeen: Bool = false
+    @AppStorage("ach.tutorial.completed") private var tutorialCompleted: Bool = false
+    @State private var showWorldsScrollHelper = false
+    @State private var showDoTutorialHelper = false
+    @State private var showBuyWorldHelper = false
+
 
     var body: some View {
 
@@ -76,25 +85,40 @@ struct LevelsView: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .ignoresSafeArea(edges: .top)
             .navigationBarBackButtonHidden(true)
+            
             worldList
                 .padding(.top, isPad ? 100 : 60)
-
+    
+            // WorldsScroll helper overlay
+            if showWorldsScrollHelper && !worldsScrollHelperSeen {
+                worldsScrollHelperOverlay
             }
-                .background {
-                    Image("Sqword-Splash")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                }
+            
+            // DoTutorial helper overlay
+            if showDoTutorialHelper && !doTutorialHelperSeen {
+                doTutorialHelperOverlay
+            }
+            
+            // BuyWorld helper overlay
+            if showBuyWorldHelper && !buyWorldHelperSeen {
+                buyWorldHelperOverlay
+            }
+        }
+        .background {
+            Image("Sqword-Splash")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
         
         // alerts
         .alert("Not enough coins", isPresented: $showInsufficientCoins) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("You don’t have enough coins to unlock \(levels.selectedWorld.name).")
+            Text("You don't have enough coins to unlock \(levels.selectedWorld.name).")
         }
         .alert("Unlock \(pendingUnlockWorld?.name ?? "this world")?",
                isPresented: $showConfirmUnlock) {
@@ -138,7 +162,24 @@ struct LevelsView: View {
                     showCoinOverlay: .constant(false),  // Levels view doesn't need coin overlay from wallet
                     pendingRewardCoins: .constant(0)
                 )
-            }        )
+            }
+        )
+        
+        .onAppear {
+            // Show worlds scroll helper if not seen
+            if !worldsScrollHelperSeen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showWorldsScrollHelper = true
+                }
+            }
+            
+            // Show buyWorld helper if returning from tutorial
+            if !buyWorldHelperSeen && tutorialCompleted {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showBuyWorldHelper = true
+                }
+            }
+        }
         
         .fullScreenCover(isPresented: $showFoodIntro) {
             WorldInstructionGate(
@@ -156,9 +197,6 @@ struct LevelsView: View {
             )
             .ignoresSafeArea()
         }
-
-
-        
     }
     
     // MARK: World list (responsive 2×2 on iPhone, 3×2 on iPad; vertical scroll)
@@ -213,6 +251,40 @@ struct LevelsView: View {
                                     .frame(width: cardW, height: cardH)
                                 }
                                 .buttonStyle(.plain)
+                                .onAppear {
+                                    // Hide worldsScroll helper when any world card appears (means user scrolled)
+                                    if showWorldsScrollHelper {
+                                        showWorldsScrollHelper = false
+                                        worldsScrollHelperSeen = true
+                                        // Show doTutorial helper after a brief delay
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                            if !doTutorialHelperSeen {
+                                                showDoTutorialHelper = true
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Hide doTutorial helper if user scrolls again
+                                    if showDoTutorialHelper {
+                                        showDoTutorialHelper = false
+                                        doTutorialHelperSeen = true
+                                    }
+                                    
+                                    // Hide buyWorld helper if user interacts with anything
+                                    if showBuyWorldHelper {
+                                        showBuyWorldHelper = false
+                                        buyWorldHelperSeen = true
+                                    }
+                                }
+                                
+//                                .simultaneousGesture(
+//                                    TapGesture().onEnded {
+//                                        if showBuyWorldHelper {
+//                                            showBuyWorldHelper = false
+//                                            buyWorldHelperSeen = true
+//                                        }
+//                                    }
+//                                )
 
                             } else {
                                 // LOCKED → unchanged
@@ -234,10 +306,33 @@ struct LevelsView: View {
                                     .frame(width: cardW, height: cardH)
                                 }
                                 .buttonStyle(.plain)
+                                .onAppear {
+                                    // Hide worldsScroll helper when any world card appears (means user scrolled)
+                                    if showWorldsScrollHelper {
+                                        showWorldsScrollHelper = false
+                                        worldsScrollHelperSeen = true
+                                        // Show doTutorial helper after a brief delay
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                            if !doTutorialHelperSeen {
+                                                showDoTutorialHelper = true
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Hide doTutorial helper if user scrolls again
+                                    if showDoTutorialHelper {
+                                        showDoTutorialHelper = false
+                                        doTutorialHelperSeen = true
+                                    }
+                                    
+                                    // Hide buyWorld helper if user interacts with anything
+                                    if showBuyWorldHelper {
+                                        showBuyWorldHelper = false
+                                        buyWorldHelperSeen = true
+                                    }
+                                }
                             }
                         }
-
-
                     }
                     .padding(.horizontal, horizPad)
                     .padding(.vertical, innerVPad) // ← this is now accounted for
@@ -249,8 +344,65 @@ struct LevelsView: View {
         }
     }
     
-
+    // Lottie Helpers
+    @ViewBuilder
+    private var buyWorldHelperOverlay: some View {
+        LottieView(
+            name: "BuyWorld_lottie",
+            loop: .loop,
+            speed: 1.0
+        )
+        .scaleEffect(0.9)
+        .frame(width: 120, height: 120)
+        .position(
+            x: UIScreen.main.bounds.width / 2,
+            y: UIScreen.main.bounds.height / 2.3
+        )
+        .allowsHitTesting(false)
+        .zIndex(100)
+    }
+    
+    @ViewBuilder
+    private var doTutorialHelperOverlay: some View {
+        LottieView(
+            name: "DoTutorial_lottie",
+            loop: .loop,
+            speed: 1.0
+        )
+        .scaleEffect(1.0)
+        .frame(width: 120, height: 120)
+        .position(
+            x: UIScreen.main.bounds.width / 2,
+            y: UIScreen.main.bounds.height / (isPad ? 1.45 : 1.8)
+        )
+        .allowsHitTesting(false)
+        .zIndex(100)
+    }
+    
+    @ViewBuilder
+    private var worldsScrollHelperOverlay: some View {
+        LottieView(
+            name: "WorldsScroll_lottie",
+            loop: .loop,
+            speed: 1.0
+        )
+        .scaleEffect(0.6)
+        .frame(width: 120, height: 120)
+        .position(
+            x: UIScreen.main.bounds.width / 2,   // Horizontally centered
+            y: UIScreen.main.bounds.height / 2   // Vertically centered
+        )
+        .allowsHitTesting(false)
+        .zIndex(100)
+    }
+    
     private func go(to world: World) {
+        // Hide tutorial helper when clicking any tutorial world
+        if world.isTutorial {
+            showDoTutorialHelper = false
+            doTutorialHelperSeen = true
+        }
+        
         // Food is always first — gate it once, then proceed normally forever.
         if world.id == "food", !UserDefaults.standard.bool(forKey: foodIntroSeenKey) {
             pendingWorldForIntro = world
@@ -261,44 +413,6 @@ struct LevelsView: View {
         }
     }
 
-    
-    // MARK: Actions
-    private func setWallet(_ expanded: Bool, animated: Bool = true) {
-        if expanded {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        }
-        let anim: Animation? = animated ? .spring(response: 0.35, dampingFraction: 0.9) : nil
-        withAnimation(anim) {
-            walletExpanded = expanded
-            walletExpansion = expanded ? 1 : 0
-        }
-    }
-
-    private func toggleWallet() { setWallet(!walletExpanded) }
-
-    private func buyRevealBoost(cost: Int, count: Int = 1) {
-        if levels.coins >= cost {
-            levels.addCoins(-cost)
-            boosts.grant(count: count, kind: .reveal)   // ← add kind
-        } else {
-            showInsufficientCoins = true
-        }
-    }
-
-    private func buyClarityBoost(cost: Int, count: Int = 1) {
-        if levels.coins >= cost {
-            levels.addCoins(-cost)
-            boosts.grant(count: count, kind: .clarity)
-        } else {
-            showInsufficientCoins = true
-        }
-    }
-
-
-    private func simulateIAPPurchase(coins: Int) {
-        levels.addCoins(coins)
-    }
-   
     @ViewBuilder
     private func destinationView(for world: World) -> some View {
         if world.isTutorial {
@@ -312,52 +426,6 @@ struct LevelsView: View {
     }
     
 }
-    
-   
-    // MARK: Small pill components
-    @ViewBuilder
-    private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon).font(.headline)
-                Text(title).font(.caption).lineLimit(1)
-                HStack(spacing: 4) {
-                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                    Text("\(cost)").font(.caption2).monospacedDigit()
-                }.opacity(0.9)
-            }
-            .foregroundStyle(.white)
-            .padding(.vertical, 10).padding(.horizontal, 12)
-            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
-                    Text("+\(amount)").font(.caption).monospacedDigit()
-                }
-                Text(price).font(.caption2).opacity(0.9)
-            }
-            .foregroundStyle(.white)
-            .padding(.vertical, 10).padding(.horizontal, 12)
-            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
 
 struct LevelBadge: View {
     let level: Int
@@ -454,4 +522,90 @@ extension BoostsService {
     @discardableResult func useReveal()  -> Bool { useOne(kind: .reveal) }
     @discardableResult func useClarity() -> Bool { useOne(kind: .clarity) }
 }
+
+
+//    // MARK: Actions
+//    private func setWallet(_ expanded: Bool, animated: Bool = true) {
+//        if expanded {
+//            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+//        }
+//        let anim: Animation? = animated ? .spring(response: 0.35, dampingFraction: 0.9) : nil
+//        withAnimation(anim) {
+//            walletExpanded = expanded
+//            walletExpansion = expanded ? 1 : 0
+//        }
+//    }
+
+//    private func toggleWallet() { setWallet(!walletExpanded) }
+
+//    private func buyRevealBoost(cost: Int, count: Int = 1) {
+//        if levels.coins >= cost {
+//            levels.addCoins(-cost)
+//            boosts.grant(count: count, kind: .reveal)   // ← add kind
+//        } else {
+//            showInsufficientCoins = true
+//        }
+//    }
+//
+//    private func buyClarityBoost(cost: Int, count: Int = 1) {
+//        if levels.coins >= cost {
+//            levels.addCoins(-cost)
+//            boosts.grant(count: count, kind: .clarity)
+//        } else {
+//            showInsufficientCoins = true
+//        }
+//    }
+
+
+//    private func simulateIAPPurchase(coins: Int) {
+//        levels.addCoins(coins)
+//    }
+   
+
+    
+   
+    // MARK: Small pill components
+//    @ViewBuilder
+//    private func walletBoostPill(icon: String, title: String, cost: Int, action: @escaping () -> Void) -> some View {
+//        Button(action: action) {
+//            VStack(spacing: 6) {
+//                Image(systemName: icon).font(.headline)
+//                Text(title).font(.caption).lineLimit(1)
+//                HStack(spacing: 4) {
+//                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+//                    Text("\(cost)").font(.caption2).monospacedDigit()
+//                }.opacity(0.9)
+//            }
+//            .foregroundStyle(.white)
+//            .padding(.vertical, 10).padding(.horizontal, 12)
+//            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+//            .overlay(
+//                RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+//            )
+//        }
+//        .buttonStyle(.plain)
+//    }
+
+//    @ViewBuilder
+//    private func walletIAPPill(amount: Int, price: String, action: @escaping () -> Void) -> some View {
+//        Button(action: action) {
+//            VStack(spacing: 6) {
+//                HStack(spacing: 6) {
+//                    Image(systemName: "dollarsign.circle.fill").imageScale(.small)
+//                    Text("+\(amount)").font(.caption).monospacedDigit()
+//                }
+//                Text(price).font(.caption2).opacity(0.9)
+//            }
+//            .foregroundStyle(.white)
+//            .padding(.vertical, 10).padding(.horizontal, 12)
+//            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+//            .overlay(
+//                RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+//            )
+//        }
+//        .buttonStyle(.plain)
+//    }
+
 
