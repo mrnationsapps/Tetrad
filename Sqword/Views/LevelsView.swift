@@ -153,7 +153,8 @@ struct LevelsView: View {
         .withFooterPanels(
             coins: levels.coins,
             boostsAvailable: boosts.remaining,
-            isInteractable: true,                 // footer is always active on Worlds
+            isInteractable: true,
+            isBoostsEnabled: false, 
             disabledStyle: .standard,
             boostsPanel: { _ in WorldsBoostsPanel() },     // read-only note on this screen
             walletPanel: { dismiss in

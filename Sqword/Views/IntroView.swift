@@ -343,11 +343,10 @@ private extension IntroView {
             name: "Settings_lottie",
             loop: .loop
         )
-        .scaleEffect(0.3)
+        .scaleEffect(isPad ? 0.3 : 0.5)
         .position(
-            x: settingsButtonFrame.maxX  - (isPad ? 180 : 140),
-            y: settingsButtonFrame.minY + (isPad ? 90 : 0)
-//            y: settingsButtonFrame.minY + 90
+            x: settingsButtonFrame.maxX  - (isPad ? 180 : 190),
+            y: settingsButtonFrame.minY + (isPad ? 90 : 40)
         )
         .allowsHitTesting(false)
         .zIndex(100)

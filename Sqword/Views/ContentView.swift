@@ -140,12 +140,12 @@ struct ContentView: View {
                 .buttonStyle(SoftRaisedPillStyle(height: 40))
                 .opacity(0.5)
                 .frame(width: 60)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
                 .safeAreaPadding(.top)      // adds the device's top safe area
                 .padding(.top, 40)          // + your extra nudge
                 .padding(.leading, 16)
                       
-                Spacer()
+//                Spacer()
 
                 VStack{
                     if let w = resolvedWorld {
@@ -155,6 +155,8 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .opacity(0.8)
                             .frame(maxWidth: .infinity, alignment: .trailing)
+                            .offset(x: -2, y: 0)
+//                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     
                     Text("Moves: \(game.moveCount)").bold()
@@ -174,7 +176,8 @@ struct ContentView: View {
             }
             .ignoresSafeArea(edges: .top)
             .navigationBarBackButtonHidden(true)
-            .zIndex(10)
+            .frame(maxWidth: .infinity)
+            .zIndex(12)
             
             VStack(spacing: 0) {
                 
@@ -251,7 +254,7 @@ struct ContentView: View {
                 .transition(.scale.combined(with: .opacity))
             }
             
-            // TapWallet helper overlay - ADD THIS HERE
+            // TapWallet helper overlay
             if showTapWalletHelper && !tapWalletHelperSeen {
                 LottieView(
                     name: "TapWallet_lottie",
@@ -267,6 +270,7 @@ struct ContentView: View {
                 .allowsHitTesting(false)
                 .zIndex(100)
             }
+            
         }
 
         .coordinateSpace(name: "stage")       // shared space for board + bag + ghost

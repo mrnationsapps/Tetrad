@@ -30,6 +30,8 @@ struct WalletPanelView: View {
     // Coin chest animation state (passed to parent)
     @Binding var showCoinOverlay: Bool
     @Binding var pendingRewardCoins: Int
+    
+    var dismissWalletExplainHelper: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -146,6 +148,7 @@ struct WalletPanelView: View {
                 // REVEAL
                 Button(action: {
                     soundFX.Coins_01()
+                    dismissWalletExplainHelper?()
                     buy(kind: .reveal, cost: 5) }) {
                     walletBoostPill(
                         icon: "wand.and.stars",
@@ -159,6 +162,7 @@ struct WalletPanelView: View {
                 // CLARITY
                 Button(action: {
                     soundFX.Coins_01()
+                    dismissWalletExplainHelper?() 
                     buy(kind: .clarity, cost: 5) }) {
                     walletBoostPill(
                         icon: "eye",

@@ -23,7 +23,6 @@ font
 game
 gear
 grid
-idea
 link
 load
 mail
@@ -44,8 +43,6 @@ vars
 webs
 wiki
 zoom
-
-
 apps
 auto
 bash
@@ -88,13 +85,11 @@ lore
 mail
 main
 maps
-mart
 mask
 menu
 meta
 midi
 mike
-mine
 mode
 mods
 mono
@@ -112,7 +107,6 @@ rank
 rate
 save
 scan
-seed
 send
 soft
 stat

@@ -28,6 +28,7 @@ public struct Footer: View {
 
     public var isInteractable: Bool = true
     public var isWalletEnabled: Bool = true
+    public var isBoostsEnabled: Bool = true
 
     public var onTapWallet: () -> Void
     public var onTapBoosts: () -> Void
@@ -53,6 +54,7 @@ public struct Footer: View {
         isInteractable: Bool = true,
         disabledStyle: FooterDisabledStyle = .standard,
         isWalletEnabled: Bool = true,
+        isBoostsEnabled: Bool = true,
         onTapWallet: @escaping () -> Void,
         onTapBoosts: @escaping () -> Void,
         barBackground: AnyShapeStyle = AnyShapeStyle(.ultraThinMaterial),
@@ -71,6 +73,7 @@ public struct Footer: View {
         self.isInteractable = isInteractable
         self.disabledStyle = disabledStyle
         self.isWalletEnabled = isWalletEnabled
+        self.isBoostsEnabled = isBoostsEnabled
         self.onTapWallet = onTapWallet
         self.onTapBoosts = onTapBoosts
         self.barBackground = barBackground
@@ -183,6 +186,9 @@ public struct Footer: View {
                     lineWidth: isBoostsActive ? 1.25 : 1
                 )
             )
+            .disabled(!isInteractable || !isBoostsEnabled)  
+            .opacity(isBoostsEnabled ? 1.0 : 0.5)
+            .grayscale(isBoostsEnabled ? 0 : 0.25)
             
 //            .overlay(alignment: .top) {
 //                if showBoostsArrow {
