@@ -551,7 +551,7 @@ final class GameState: ObservableObject {
         // (unchanged)
         let todayKey: String = (identity?.dayUTC) ?? {
             let fmt = ISO8601DateFormatter()
-            fmt.timeZone = .init(secondsFromGMT: 0)
+            fmt.timeZone = .current        // ← use device local timezone
             fmt.formatOptions = [.withFullDate]
             return fmt.string(from: Date())
         }()
@@ -566,7 +566,7 @@ final class GameState: ObservableObject {
     
     private func advanceStreakIfNeeded() {
         let fmt = ISO8601DateFormatter()
-        fmt.timeZone = .init(secondsFromGMT: 0)
+        fmt.timeZone = .current        // ← use device local timezone
         fmt.formatOptions = [.withFullDate]
         let today = fmt.string(from: Date())
 
